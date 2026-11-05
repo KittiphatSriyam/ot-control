@@ -23,22 +23,51 @@
   const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const SHIFT_NAME = { D: 'กะเช้า (Day)', N: 'กะดึก (Night)', H: 'วันหยุด (Holiday)' };
   const STATUS_TH = { pending: 'รออนุมัติ', approved: 'อนุมัติแล้ว', rejected: 'ไม่อนุมัติ' };
+  const AUTOFILL_WEEKS = 13; // auto-fill horizon: 3 months
 
   const TECH_TABS = [
-    { id: 'home', label: 'สัปดาห์นี้' },
-    { id: 'cal', label: 'ปฏิทิน' },
-    { id: 'req', label: 'คำขอของฉัน' },
-    { id: 'pattern', label: 'Pattern / วันหยุด' },
+    { id: 'home', label: 'สัปดาห์นี้', icon: 'week' },
+    { id: 'cal', label: 'ปฏิทิน', icon: 'cal' },
+    { id: 'req', label: 'คำขอของฉัน', icon: 'req' },
+    { id: 'pattern', label: 'Pattern', icon: 'pattern' },
   ];
   const ENG_TABS = [
-    { id: 'approve', label: 'อนุมัติ' },
-    { id: 'week', label: 'ตารางสัปดาห์' },
-    { id: 'month', label: 'สรุปรายเดือน' },
-    { id: 'groups', label: 'กลุ่มงาน' },
-    { id: 'users', label: 'ผู้ใช้' },
-    { id: 'pattern', label: 'Pattern' },
-    { id: 'holiday', label: 'วันหยุด', admin: true },
+    { id: 'approve', label: 'อนุมัติ', icon: 'approve' },
+    { id: 'week', label: 'ตารางสัปดาห์', icon: 'table' },
+    { id: 'month', label: 'สรุปรายเดือน', icon: 'chart' },
+    { id: 'groups', label: 'กลุ่มงาน', icon: 'layers' },
+    { id: 'users', label: 'ผู้ใช้', icon: 'users' },
+    { id: 'pattern', label: 'Pattern', icon: 'pattern' },
+    { id: 'holiday', label: 'วันหยุด', icon: 'flag', admin: true },
   ];
+
+  // Line icons (Lucide-style, stroke = currentColor)
+  const ICON = {
+    week: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M7 15h10"/>',
+    cal: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01"/>',
+    req: '<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2M12 11h4M12 16h4M8 11h.01M8 16h.01"/>',
+    pattern: '<path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/>',
+    approve: '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>',
+    table: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/>',
+    chart: '<path d="M3 3v18h18"/><path d="M18 17V9M13 17V5M8 17v-3"/>',
+    layers: '<path d="m12 2 10 5-10 5L2 7l10-5z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/>',
+    users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+    flag: '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><path d="M4 22v-7"/>',
+    chevL: '<path d="m15 18-6-6 6-6"/>',
+    chevR: '<path d="m9 18 6-6-6-6"/>',
+    download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>',
+    zap: '<path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/>',
+    bot: '<rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4M8 16h.01M16 16h.01"/>',
+    info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>',
+    check: '<path d="M20 6 9 17l-5-5"/>',
+    x: '<path d="M18 6 6 18M6 6l12 12"/>',
+    sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>',
+    moon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"/>',
+    coffee: '<path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/><path d="M6 2v2M10 2v2M14 2v2"/>',
+    upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>',
+  };
+  const ico = (name, size) => `<svg class="ic" width="${size || 20}" height="${size || 20}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[name] || ''}</svg>`;
 
   // ================= utils =================
   const $ = (sel, el) => (el || document).querySelector(sel);
@@ -84,7 +113,8 @@
 
   function toast(msg, isErr) {
     const d = document.createElement('div');
-    d.textContent = msg;
+    d.innerHTML = ico(isErr ? 'x' : 'check', 16) + '<span></span>';
+    d.lastChild.textContent = msg;
     if (isErr) d.className = 'err';
     $('#toast').appendChild(d);
     setTimeout(() => d.remove(), isErr ? 5000 : 2600);
@@ -125,7 +155,7 @@
 
   function modal(html, onMount) {
     const root = $('#modal-root');
-    root.innerHTML = `<div class="modal-bg"><div class="modal">${html}</div></div>`;
+    root.innerHTML = `<div class="modal-bg"><div class="modal" role="dialog"><div class="grab"></div>${html}</div></div>`;
     const bg = $('.modal-bg', root);
     bg.addEventListener('click', e => { if (e.target === bg) closeModal(); });
     if (onMount) onMount($('.modal', root));
@@ -173,20 +203,29 @@
     renderShell();
   }
 
+  function avatarHtml(cls) {
+    const p = S.profile || {};
+    if (p.pictureUrl) return `<img class="avatar ${cls || ''}" src="${esc(p.pictureUrl)}" alt="">`;
+    const n = (S.user && (S.user.nickname || S.user.name)) || p.displayName || '?';
+    return `<span class="avatar ph ${cls || ''}">${esc(n.trim().charAt(0).toUpperCase())}</span>`;
+  }
+  function plainTop() {
+    return `<div class="top"><div class="bar"><div class="brand"><span class="logo">OT</span><div><div class="title">OT Control</div><div class="sub">บันทึก OT ผ่าน LINE</div></div></div></div></div>`;
+  }
   function lineCard() {
     const p = S.profile || {};
-    return `<div class="row" style="margin-bottom:10px">
-      ${p.pictureUrl ? `<img src="${esc(p.pictureUrl)}" alt="" style="width:48px;height:48px;border-radius:50%">` : ''}
-      <div><div class="small muted">เข้าสู่ระบบด้วย LINE</div><b>${esc(p.displayName || '')}</b></div></div>`;
+    return `<div class="welcome">${avatarHtml()}
+      <div class="linepill">${ico('check', 14)} เข้าสู่ระบบด้วย LINE</div>
+      <div style="margin-top:6px;font-weight:600">${esc(p.displayName || '')}</div></div>`;
   }
 
   function renderRegister() {
     $('#app').innerHTML = `
-      <div class="top"><div class="bar"><span class="title">OT Control</span></div></div>
-      <main><div class="card">
-        <h2>ลงทะเบียนผูกบัญชี LINE</h2>
+      ${plainTop()}
+      <main style="max-width:560px"><div class="card">
         ${lineCard()}
-        <p class="small muted">กรอก EN ของคุณเพื่อผูกกับบัญชี LINE นี้ (ทำครั้งเดียว) จากนั้น Engineer ของกลุ่มจะอนุมัติ</p>
+        <h2 class="center">ลงทะเบียนผูกบัญชี LINE</h2>
+        <p class="small muted center">กรอก EN ของคุณเพื่อผูกกับบัญชี LINE นี้ (ทำครั้งเดียว) จากนั้น Engineer ของกลุ่มจะอนุมัติ</p>
         <label class="f">EN (รหัสพนักงาน) *</label><input class="in" id="r-en" inputmode="numeric" placeholder="เช่น 535884">
         <label class="f">ชื่อ-นามสกุล (อังกฤษ)</label><input class="in" id="r-name" placeholder="เช่น Oatsadawut S.">
         <label class="f">ชื่อเล่น</label><input class="in" id="r-nick">
@@ -199,7 +238,7 @@
           <div class="seg" id="r-team">${L.TEAMS.map(t => `<button data-v="${t}">Team ${t}</button>`).join('')}</div>
         </div>
         <label class="f">เบอร์โทร</label><input class="in" id="r-phone" inputmode="tel">
-        <label class="row" style="margin-top:12px"><input type="checkbox" id="r-eng" style="width:20px;height:20px"> <span>ฉันเป็น <b>Engineer</b> (รอ Admin อนุมัติ)</span></label>
+        <label class="check-row"><input type="checkbox" id="r-eng"> <span>ฉันเป็น <b>Engineer</b> <span class="small muted">(รอ Admin อนุมัติ)</span></span></label>
         <div id="r-msg"></div>
         <button class="btn primary block" id="r-go" style="margin-top:14px">ลงทะเบียน</button>
       </div></main>`;
@@ -223,8 +262,8 @@
   function renderWaiting() {
     const u = S.user;
     $('#app').innerHTML = `
-      <div class="top"><div class="bar"><span class="title">OT Control</span></div></div>
-      <main><div class="card warn">
+      ${plainTop()}
+      <main style="max-width:560px"><div class="card warn center">
         ${lineCard()}
         <h2>${u.status === 'inactive' ? 'บัญชีถูกปิดการใช้งาน' : u.requestedRole === 'engineer' ? 'รอ Admin อนุมัติเป็น Engineer' : 'รอ Engineer ของกลุ่มอนุมัติ'}</h2>
         <p>EN <b>${esc(u.en)}</b> ${esc(uName(u))} ผูกกับ LINE นี้แล้ว</p>
@@ -243,23 +282,28 @@
     const list = tabs();
     const fromHash = location.hash.replace('#', '');
     if (!S.tab || !list.some(t => t.id === S.tab)) S.tab = list.some(t => t.id === fromHash) ? fromHash : list[0].id;
+    const bottom = !isEng(); // technicians: app-style bottom navigation · engineers: pill tabs under the header
+    const roleCls = u.isSuper ? 'super' : u.isAdmin ? 'admin' : '';
+    const nav = `<nav class="tabs ${bottom ? 'bottomnav' : ''}">${list.map(t => `<button data-tab="${t.id}" class="${t.id === S.tab ? 'on' : ''}">${ico(t.icon, bottom ? 22 : 17)}<span>${t.label}</span>${t.id === 'approve' && S.pendingCount ? `<span class="badge">${S.pendingCount}</span>` : ''}</button>`).join('')}</nav>`;
     $('#app').innerHTML = `
       <div class="top">
         <div class="bar">
-          <span class="title">OT Control</span>
-          <div class="who">${esc(u.nickname || u.name || '')} ${isEng() ? '' : teamBadge(u.team)}<br><span style="opacity:.85">EN ${esc(u.en)} · ${roleLabel(u)}${!isEng() && u.groupId ? ' · ' + esc(groupName(u.groupId)) : ''}</span></div>
-          ${S.profile && S.profile.pictureUrl ? `<img src="${esc(S.profile.pictureUrl)}" alt="" style="width:34px;height:34px;border-radius:50%">` : ''}
+          <div class="brand"><span class="logo">OT</span>
+            <div style="min-width:0"><div class="title">OT Control</div>
+              <div class="sub">EN ${esc(u.en)}${!isEng() && u.groupId ? ' · ' + esc(groupName(u.groupId)) : ''}</div></div></div>
+          <div class="who"><div><b>${esc(u.nickname || u.name || '')}</b> ${isEng() ? '' : teamBadge(u.team)}<br><span class="role ${roleCls}">${roleLabel(u)}</span></div>${avatarHtml()}</div>
         </div>
-        <nav class="tabs">${list.map(t => `<button data-tab="${t.id}" class="${t.id === S.tab ? 'on' : ''}">${t.label}${t.id === 'approve' && S.pendingCount ? `<span class="badge">${S.pendingCount}</span>` : ''}</button>`).join('')}</nav>
+        ${bottom ? '' : nav}
       </div>
-      <main id="view"></main>`;
+      <main id="view" class="${bottom ? 'has-bottomnav' : ''}"></main>
+      ${bottom ? nav : ''}`;
     $$('.tabs button').forEach(b => b.onclick = () => { S.tab = b.dataset.tab; history.replaceState(null, '', '#' + S.tab); renderShell(); });
     renderTab();
   }
 
   async function renderTab() {
     const el = $('#view');
-    el.innerHTML = '<div class="splash" style="min-height:40vh"><div class="spinner"></div></div>';
+    el.innerHTML = '<div class="skel" aria-busy="true"><div></div><div></div><div></div></div>';
     const views = { home: viewHome, cal: viewCal, req: viewReq, pattern: viewPattern, approve: viewApprove, week: viewWeek, month: viewMonth, holiday: viewHoliday, users: viewUsers, groups: viewGroups };
     try { await views[S.tab](el); } catch (e) {
       el.innerHTML = `<div class="card err">${esc(e.message)}</div>`;
@@ -401,32 +445,53 @@
     const team = S.user.team;
     const defs = defaultsFor(S.user, ws, by);
     const tSt = L.teamStatus(team, today);
-    const pct = Math.min(100, w.total / S.cfg.weeklyCap * 100);
+    const cap = S.cfg.weeklyCap;
+    const pct = Math.min(1, w.total / cap);
+    const R = 44, CIRC = 2 * Math.PI * R;
+    const heroIcon = { D: 'sun', N: 'moon', H: 'coffee' }[tSt] || 'week';
+    const todayHol = holidayNote(today, team);
+    // left accent colour of a day row: the shift / type it represents
+    const accent = e => !e ? '#e2e8f0' : e.type === 'OT_WD' ? (e.shift === 'N' ? '#1e3a8a' : '#f59e0b')
+      : e.type === 'OT_HD' ? '#06b6d4' : e.type === 'NO_OT' ? '#22c55e' : e.type === 'OFF' ? '#cbd5e1' : (C[e.type] || '#cbd5e1');
     el.innerHTML = `
+      <section class="hero ${tSt || ''}">
+        <div class="hd">วันนี้ · ${dLong(today)}</div>
+        <div class="shift">${ico(heroIcon, 28)}<span>${team ? SHIFT_NAME[tSt] : 'ยังไม่ได้กำหนดทีม'}</span></div>
+        <div class="meta">${team ? `<span class="tag">Team ${esc(team)}</span>` : ''}${S.user.groupId ? `<span class="tag">${esc(groupName(S.user.groupId))}</span>` : ''}<span class="tag">Pattern 4W2H</span></div>
+        ${todayHol ? `<div class="holi">${todayHol}</div>` : ''}
+      </section>
       <div class="card">
-        <div class="small muted">วันนี้ ${dLong(today)}</div>
-        <div style="font-size:18px;font-weight:700;margin-top:2px">${team ? `ทีม ${teamBadge(team)} ${ptBadge(tSt)} ${SHIFT_NAME[tSt]}` : 'ยังไม่ได้กำหนดทีม'}</div>
-        ${holidayNote(today, team) ? `<div class="small" style="color:var(--red)">${holidayNote(today, team)}</div>` : ''}
-      </div>
-      <div class="card">
-        <div class="nav"><button class="btn" id="w-prev">‹</button><div class="label">${dShort(ws)} – ${dShort(we)}</div><button class="btn" id="w-next">›</button></div>
-        <div class="row"><span class="big" style="color:${w.over ? 'var(--red)' : 'inherit'}">${num(w.total)}</span><span class="muted">/ ${S.cfg.weeklyCap} ชม.</span><span class="spacer"></span>
-          <span class="small muted">ปกติ ${num(w.normal)} · OT ${num(w.ot)}</span></div>
-        <div class="progress ${w.over ? 'over' : ''}"><div style="width:${pct}%"></div></div>
-        ${w.over ? '<div class="alert err">เกิน ' + S.cfg.weeklyCap + ' ชม./สัปดาห์</div>' : ''}
-        <div class="days" style="margin-top:8px">${w.days.map(d => {
+        <div class="nav"><button class="btn icon" id="w-prev" aria-label="สัปดาห์ก่อน">${ico('chevL')}</button><div class="label">${dShort(ws)} – ${dShort(we)} ${ws.slice(0, 4)}</div><button class="btn icon" id="w-next" aria-label="สัปดาห์ถัดไป">${ico('chevR')}</button></div>
+        <div class="weeksum">
+          <div class="ring ${w.over ? 'over' : ''}">
+            <svg width="104" height="104" viewBox="0 0 104 104"><circle class="bg" cx="52" cy="52" r="${R}" fill="none" stroke-width="10"/>
+              <circle class="fg" cx="52" cy="52" r="${R}" fill="none" stroke-width="10" stroke-linecap="round" stroke-dasharray="${CIRC.toFixed(1)}" stroke-dashoffset="${(CIRC * (1 - pct)).toFixed(1)}"/></svg>
+            <div class="val"><div><b>${num(w.total)}</b><span>/ ${cap} ชม.</span></div></div>
+          </div>
+          <div class="kv">
+            <div><span class="muted">ชั่วโมงปกติ</span><b>${num(w.normal)}</b></div>
+            <div><span class="muted">OT</span><b>${num(w.ot)}</b></div>
+            <div><span class="muted">${w.over ? 'เกินเพดาน' : 'เหลือได้อีก'}</span><b style="color:${w.over ? 'var(--red)' : 'var(--brand-700)'}">${num(Math.abs(cap - w.total))} ชม.</b></div>
+            ${w.pending ? `<div><span class="muted">รออนุมัติ</span><b style="color:#b45309">${w.pending} วัน</b></div>` : ''}
+          </div>
+        </div>
+        ${w.over ? `<div class="alert err">เกิน ${cap} ชม./สัปดาห์ — ลองเปลี่ยนบางวันเป็น "ออกโอ"</div>` : ''}
+        <div class="days">${w.days.map(d => {
           const st = L.teamStatus(team, d.date);
           const hol = holidayNote(d.date, team);
-          return `<div class="d ${d.date === today ? 'today' : ''}" data-date="${d.date}">
-            <div class="dt"><b>${DOW[L.dow(d.date)]}</b><span class="small muted">${dShort(d.date)}</span></div>
-            ${ptBadge(st)}
-            <div style="flex:1">${d.entry || !defs[d.date] ? chip(d.entry) : `<span class="chip sugchip" style="background:${L.cellColor(defs[d.date]) || '#fff'}">${esc(L.cellText(defs[d.date]))}</span> <span class="small muted">ค่า default</span>`} ${d.entry && L.TYPES[d.entry.type].shift ? '<span class="small">' + shiftIcon(d.entry.shift) + '</span>' : ''}
+          const df = defs[d.date];
+          const shown = d.entry || df;
+          return `<div class="d ${d.date === today ? 'today' : ''}" data-date="${d.date}" style="--accent:${accent(shown)}">
+            <div class="dt"><b>${DOW[L.dow(d.date)]}</b><span class="num">${+d.date.slice(8)}</span></div>
+            <div class="body">${ptBadge(st)}
+              ${d.entry || !df ? chip(d.entry) : `<span class="chip sugchip" style="background:${L.cellColor(df) || '#fff'}">${esc(L.cellText(df))}</span><span class="small muted">ค่า default</span>`}
+              ${d.entry && d.entry.type === 'OT_WD' ? '<span class="small">' + shiftIcon(d.entry.shift) + '</span>' : ''}
               ${d.entry && d.entry.status !== 'approved' ? `<span class="st ${d.entry.status}">${STATUS_TH[d.entry.status]}</span>` : ''}
               ${hol ? `<div class="hol">${hol}</div>` : ''}</div>
-            <span class="muted">›</span></div>`;
+            <span class="chev">${ico('chevR', 18)}</span></div>`;
         }).join('')}</div>
-        <p class="small muted" style="margin:10px 0 0">🤖 ระบบลงข้อมูลให้อัตโนมัติทุกคืนตาม Pattern (3.5 / OFF / 10.5 / ออกโอ) — <b>แก้เฉพาะวันที่ไม่ตรง</b> เช่น ลา, สลับกะ, ไม่ได้ทำ OT แล้วรอ Engineer อนุมัติ</p>
-        ${Object.keys(defs).length ? '<button class="btn block" id="w-fill" style="margin-top:8px">⚡ เติมวันที่ว่างตาม Pattern ตอนนี้</button>' : ''}
+        <div class="banner">${ico('bot', 18)}<div>ระบบลงข้อมูลให้อัตโนมัติล่วงหน้า 3 เดือนตาม Pattern (3.5 / OFF / 10.5 / ออกโอ) — <b>แตะวันที่ไม่ตรง</b>เพื่อแก้ เช่น ลา สลับกะ ไม่ได้ทำ OT แล้วรอ Engineer อนุมัติ</div></div>
+        ${Object.keys(defs).length ? `<button class="btn block" id="w-fill" style="margin-top:10px">${ico('zap', 18)} เติมวันที่ว่างตาม Pattern ตอนนี้</button>` : ''}
       </div>
       ${legend()}`;
     $('#w-prev').onclick = () => { S.week = L.addDays(S.week, -7); rerender(); };
@@ -624,6 +689,7 @@
   async function viewWeek(el) {
     const ws = S.week, we = L.addDays(ws, 6), days = L.weekDays(ws), today = L.todayStr();
     const tc = dd => dd === today ? ' today' : ''; // highlight today's column
+    const isPast = ws < L.weekStart(today);
     const d = await api('teamData', { from: ws, to: we, groupId: S.groupFilter }, { quiet: true });
     const users = sortUsers(d.users.filter(u => u.role === 'technician' || d.entries.some(e => e.en === u.en)));
     const byU = {}; d.entries.forEach(e => { (byU[e.en] = byU[e.en] || {})[e.date] = e; });
@@ -653,14 +719,15 @@
         <td class="num">${num(w.normal)}</td><td class="num ${w.over ? 'over' : ''}">${num(w.total)}</td></tr>`;
     });
     el.innerHTML = `<div class="card">
-      <div class="nav"><button class="btn" id="g-prev">‹</button><div class="label">สัปดาห์ ${dShort(ws)} – ${dShort(we)} ${ws.slice(0, 4)}</div><button class="btn" id="g-next">›</button></div>
-      <div class="row wrap small" style="margin-bottom:8px">
-        <span>เกิน ${S.cfg.weeklyCap} ชม.: <b style="color:${overN ? 'var(--red)' : 'inherit'}">${overN} คน</b></span>
-        <span>รออนุมัติ: <b>${pendN}</b></span><span class="spacer"></span>
+      <div class="nav"><button class="btn icon" id="g-prev" aria-label="สัปดาห์ก่อน">${ico('chevL')}</button><div class="label">สัปดาห์ ${dShort(ws)} – ${dShort(we)} ${ws.slice(0, 4)}</div><button class="btn icon" id="g-next" aria-label="สัปดาห์ถัดไป">${ico('chevR')}</button></div>
+      <div class="toolbar">
+        <span class="stat ${overN ? 'bad' : ''}">เกิน ${S.cfg.weeklyCap} ชม. <b>${overN}</b> คน</span>
+        <span class="stat">รออนุมัติ <b>${pendN}</b></span>
+        <span class="spacer"></span>
         ${groupPicker('g-group')}
         <button class="btn sm" id="g-today">สัปดาห์นี้</button>
-        ${fill.length ? `<button class="btn sm" id="g-fill">🤖 Auto-fill (${fill.reduce((n, f) => n + f.entries.length, 0)} ช่อง)</button>` : ''}
-        <button class="btn sm primary" id="g-xls">⬇ Excel</button>
+        ${fill.length ? `<button class="btn sm" id="g-fill" title="${isPast ? 'สัปดาห์ที่ผ่านมาแล้ว: เติมเฉพาะสัปดาห์นี้' : 'เติมค่า default ตั้งแต่สัปดาห์นี้ไป 3 เดือน'}">${ico('bot', 16)} Auto-fill ${isPast ? 'เฉพาะสัปดาห์นี้' : '3 เดือน'} · ว่าง ${fill.reduce((n, f) => n + f.entries.length, 0)} ช่อง</button>` : ''}
+        <button class="btn sm primary" id="g-xls">${ico('download', 16)} Excel</button>
       </div>
       <div class="scroll"><table class="grid">
         <tr><th class="name">NAME</th>${days.map(dd => { const h = L.publicHolidayOn(S.holidays, dd); return `<th class="${h ? 'hol' : ''}${tc(dd)}" title="${esc((h ? h.name : '') + (dd === today ? ' (วันนี้)' : ''))}">${dd === today ? '<span class="todaytag">วันนี้</span>' : ''}${DOW[L.dow(dd)].toUpperCase()}<br>${+dd.slice(8)}</th>`; }).join('')}<th>W/Hrs.</th><th>TOTAL</th></tr>
@@ -673,7 +740,8 @@
     $('#g-today').onclick = () => { S.week = L.weekStart(L.todayStr()); rerender(); };
     bindGroupPicker('g-group');
     $('#g-xls').onclick = () => exportExcel({ from: ws, to: we, title: 'Week ' + ws, data: d });
-    if ($('#g-fill')) $('#g-fill').onclick = () => runAutoFill(ws, S.groupFilter, rerender);
+    // a week in the past: fill only that week (never invent 3 months of history)
+    if ($('#g-fill')) $('#g-fill').onclick = () => runAutoFill(ws, S.groupFilter, isPast ? 1 : AUTOFILL_WEEKS, rerender);
     $$('td.cell', el).forEach(td => td.onclick = () => {
       const u = d.users.find(x => x.en === td.dataset.en);
       openEntry({ user: u, date: td.dataset.date, entry: (byU[u.en] || {})[td.dataset.date], byDate: byU[u.en] || {}, onSaved: rerender });
@@ -681,17 +749,18 @@
   }
 
   /**
-   * Server-side auto-fill of the default pattern for one week.
+   * Server-side auto-fill of the default pattern, `weeks` weeks starting at ws (default: 3 months = 13 weeks).
    * groupId: '' = every group I manage (admin: all) · '__none__' = no group (admin) · otherwise that group.
    */
-  async function runAutoFill(ws, groupId, after) {
-    const we = L.addDays(ws, 6);
+  async function runAutoFill(ws, groupId, weeks, after) {
+    weeks = weeks || AUTOFILL_WEEKS;
+    const we = L.addDays(ws, weeks * 7 - 1);
     const scope = groupId === '__none__' ? 'Technician ที่ยังไม่มีกลุ่ม' : groupId ? 'กลุ่ม ' + groupName(groupId) : (isAdmin() ? 'ทุกกลุ่ม' : 'ทุกกลุ่มที่คุณดูแล');
-    if (!confirm(`🤖 Auto-fill สัปดาห์ ${dShort(ws)}–${dShort(we)} ${ws.slice(0, 4)}\n${scope}\n\n` +
-      `ลงค่า default ตาม Pattern (3.5 / OFF / 10.5 / ออกโอ ไม่เกิน ${S.cfg.weeklyCap} ชม.)\n` +
+    if (!confirm(`🤖 Auto-fill ${weeks > 1 ? '3 เดือน (' + weeks + ' สัปดาห์)' : '1 สัปดาห์'}: ${dShort(ws)} ${ws.slice(0, 4)} – ${dShort(we)} ${we.slice(0, 4)}\n${scope}\n\n` +
+      `ลงค่า default ตาม Pattern (3.5 / OFF / 10.5 / ออกโอ ไม่เกิน ${S.cfg.weeklyCap} ชม./สัปดาห์)\n` +
       `เฉพาะช่องที่ยังว่าง · ไม่ทับข้อมูลที่ลงไว้ · ถือว่าอนุมัติแล้ว (AUTO)`)) return;
     try {
-      const r = await api('autoFill', { date: ws, groupId: groupId || '' });
+      const r = await api('autoFill', { date: ws, groupId: groupId || '', weeks });
       toast(r.added ? `Auto-fill แล้ว ${r.added} ช่อง (${r.people} คน)` : 'ไม่มีช่องว่างให้เติม');
     } catch (e) { toast(e.message, true); }
     if (after) after();
@@ -899,15 +968,15 @@
     const mineIds = isAdmin() ? d.groups.map(g => g.id) : d.groups.filter(g => g.engineers.some(e => e.en === S.user.en)).map(g => g.id);
     const mine = d.groups.filter(g => mineIds.includes(g.id));
     const others = d.groups.filter(g => !mineIds.includes(g.id));
-    const card = g => `<div class="card" data-gid="${esc(g.id)}" style="${g.status !== 'active' ? 'opacity:.7' : ''}">
-      <div class="row wrap"><h3 style="margin:0">${esc(g.name)}</h3>
-        ${g.status !== 'active' ? '<span class="st rejected">ปิดแล้ว</span>' : '<span class="st approved">เปิดรับสมาชิก</span>'}
-        <span class="spacer"></span><span class="small muted">Technician ${g.members} คน</span></div>
-      <div class="small" style="margin:6px 0">Engineer: ${g.engineers.map(e => `<span class="chip" style="min-width:0">${esc(e.name)}</span>`).join(' ') || '<span class="muted">-</span>'}</div>
-      <div class="row wrap" style="margin-bottom:8px">
-        <span class="small"><b>🤖 Auto-fill</b></span>
-        <button class="btn sm primary" data-act="af-this">สัปดาห์นี้</button>
-        <button class="btn sm" data-act="af-next">สัปดาห์หน้า</button>
+    const card = g => `<div class="card gcard" data-gid="${esc(g.id)}" style="${g.status !== 'active' ? 'opacity:.7' : ''}">
+      <div class="row wrap"><h3>${esc(g.name)}</h3>
+        ${g.status !== 'active' ? '<span class="st rejected">ปิดแล้ว</span>' : '<span class="st approved">เปิดรับสมาชิก</span>'}</div>
+      <div class="gstat"><span>${ico('users', 15)} Technician <b>${g.members}</b> คน</span>
+        <span>Engineer: ${g.engineers.map(e => `<b>${esc(e.name)}</b>`).join(', ') || '-'}</span></div>
+      <div class="afbar">
+        <span class="lbl">${ico('bot', 16)} Auto-fill</span>
+        <button class="btn sm primary" data-act="af-this">3 เดือน (ตั้งแต่สัปดาห์นี้)</button>
+        <button class="btn sm" data-act="af-next">สัปดาห์นี้อย่างเดียว</button>
       </div>
       <div class="row wrap">
         <button class="btn sm" data-act="rename">เปลี่ยนชื่อ</button>
@@ -917,14 +986,14 @@
           <button class="btn sm dangerfill" data-act="del">ลบ</button>` : ''}
       </div></div>`;
     el.innerHTML = `
-      <div class="card"><h3>สร้างกลุ่มงานใหม่</h3>
+      <div class="card"><h3>${ico('plus', 18)} สร้างกลุ่มงานใหม่</h3>
         <p class="small muted">เช่น "Rework Titivat S", "BL Titivat S" — คุณจะเป็น Engineer ผู้ดูแลกลุ่ม และ Technician จะเลือกกลุ่มนี้ตอนลงทะเบียน</p>
         <div class="row"><input class="in" id="g-name" maxlength="60" placeholder="ชื่อกลุ่มงาน"><button class="btn primary" id="g-create">สร้าง</button></div>
       </div>
-      ${mine.length ? `<div class="card"><div class="row wrap"><b>🤖 Auto-fill ${isAdmin() ? 'ทุกกลุ่ม' : 'ทุกกลุ่มที่ฉันดูแล'}</b><span class="spacer"></span>
-        <button class="btn sm primary" id="af-all-this">สัปดาห์นี้</button><button class="btn sm" id="af-all-next">สัปดาห์หน้า</button></div>
-        <p class="small muted" style="margin:6px 0 0">ลงค่า default ตาม Pattern ให้ Technician ที่ active เฉพาะช่องที่ยังว่าง (ไม่ทับที่ลงไว้) · ถือว่าอนุมัติแล้ว · ระบบรันเองทุกคืน 00:30 อยู่แล้ว ปุ่มนี้ใช้เมื่ออยากให้ขึ้นทันที เช่น เพิ่งอนุมัติคนใหม่</p></div>` : ''}
-      <h3 style="margin:14px 2px 8px">${isAdmin() ? 'กลุ่มทั้งหมด' : 'กลุ่มที่ฉันดูแล'} (${mine.length})</h3>
+      ${mine.length ? `<div class="card"><div class="afbar" style="margin:0"><span class="lbl">${ico('bot', 16)} Auto-fill ${isAdmin() ? 'ทุกกลุ่ม' : 'ทุกกลุ่มที่ฉันดูแล'}</span>
+        <button class="btn sm primary" id="af-all-this">3 เดือน (ตั้งแต่สัปดาห์นี้)</button><button class="btn sm" id="af-all-next">สัปดาห์นี้อย่างเดียว</button></div>
+        <p class="small muted" style="margin:8px 0 0">ลงค่า default ตาม Pattern ให้ Technician ที่ active ล่วงหน้า 3 เดือน เฉพาะช่องที่ยังว่าง (ไม่ทับที่ลงไว้) · ถือว่าอนุมัติแล้ว · ระบบรันเองทุกคืน 00:30 ให้มีข้อมูลล่วงหน้า 3 เดือนเสมอ ปุ่มนี้ใช้เมื่ออยากให้ขึ้นทันที เช่น เพิ่งอนุมัติคนใหม่</p></div>` : ''}
+      <div class="section-title">${isAdmin() ? 'กลุ่มทั้งหมด' : 'กลุ่มที่ฉันดูแล'} (${mine.length})</div>
       ${mine.map(card).join('') || '<div class="card muted">ยังไม่มีกลุ่ม</div>'}
       ${others.length ? `<div class="card"><h3>กลุ่มอื่น</h3>${others.map(g => `<div class="small">• <b>${esc(g.name)}</b> — Engineer: ${esc(g.engineers.map(e => e.name).join(', ') || '-')}${g.status !== 'active' ? ' (ปิด)' : ''}</div>`).join('')}</div>` : ''}`;
 
@@ -934,15 +1003,15 @@
       if (!name) return toast('กรุณาตั้งชื่อกลุ่ม', true);
       try { await api('createGroup', { name }); await after('สร้างกลุ่มแล้ว'); } catch (e) { toast(e.message, true); }
     };
-    const thisWeek = L.weekStart(L.todayStr()), nextWeek = L.addDays(thisWeek, 7);
+    const thisWeek = L.weekStart(L.todayStr());
     if ($('#af-all-this')) {
-      $('#af-all-this').onclick = () => runAutoFill(thisWeek, '');
-      $('#af-all-next').onclick = () => runAutoFill(nextWeek, '');
+      $('#af-all-this').onclick = () => runAutoFill(thisWeek, '', AUTOFILL_WEEKS);
+      $('#af-all-next').onclick = () => runAutoFill(thisWeek, '', 1);
     }
     $$('[data-gid]', el).forEach(c => {
       const g = d.groups.find(x => x.id === c.dataset.gid);
-      $('[data-act="af-this"]', c).onclick = () => runAutoFill(thisWeek, g.id);
-      $('[data-act="af-next"]', c).onclick = () => runAutoFill(nextWeek, g.id);
+      $('[data-act="af-this"]', c).onclick = () => runAutoFill(thisWeek, g.id, AUTOFILL_WEEKS);
+      $('[data-act="af-next"]', c).onclick = () => runAutoFill(thisWeek, g.id, 1);
       $('[data-act="rename"]', c).onclick = async () => {
         const name = prompt('ชื่อกลุ่มใหม่', g.name);
         if (!name || name === g.name) return;
