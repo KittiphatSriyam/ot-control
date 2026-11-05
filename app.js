@@ -92,6 +92,16 @@
   let busyN = 0;
   function busy(on) { busyN += on ? 1 : -1; $('#busy').hidden = busyN <= 0; }
 
+  /** allow one automatic re-login per 2 minutes */
+  function canRelogin() {
+    try {
+      const last = +sessionStorage.getItem('ot_relogin') || 0;
+      if (Date.now() - last < 120000) return false;
+      sessionStorage.setItem('ot_relogin', String(Date.now()));
+      return true;
+    } catch (e) { return false; }
+  }
+
   async function api(action, data, opts) {
     opts = opts || {};
     if (!opts.quiet) busy(true);
@@ -102,8 +112,8 @@
       });
       const j = await res.json();
       if (!j.ok) {
-        if (j.error === 'AUTH' && window.liff && !CFG.DEV_USER) {
-          // LINE token expired → log in with LINE again
+        if (j.error === 'AUTH' && window.liff && !CFG.DEV_USER && canRelogin()) {
+          // LINE token expired → log in with LINE again (once; a config error would otherwise loop forever)
           try { liff.logout(); } catch (e) { /* ignore */ }
           liff.login({ redirectUri: location.href });
         }
@@ -127,8 +137,8 @@
     const pub = L.publicHolidayOn(S.holidays, date);
     const mine = team ? L.teamHolidayOn(S.holidays, team, date) : null;
     const out = [];
-    if (mine) out.push('🎌 วันหยุด' + (mine.date !== date ? 'ชดเชย' : '') + 'ของทีม ' + team + ': ' + mine.name);
-    else if (pub) out.push('🎌 ' + pub.name + (team && pub['sub' + team] ? ' (ทีม ' + team + ' หยุดชดเชย ' + dShort(pub['sub' + team]) + ')' : ''));
+    if (mine) out.push('🎌 วันหยุด' + (mine.date !== date ? 'ชดเชย' : '') + 'ของทีม ' + esc(team) + ': ' + esc(mine.name));
+    else if (pub) out.push('🎌 ' + esc(pub.name) + (team && pub['sub' + team] ? ' (ทีม ' + esc(team) + ' หยุดชดเชย ' + dShort(pub['sub' + team]) + ')' : ''));
     return out.join('<br>');
   }
 
@@ -566,7 +576,8 @@
         if (isEngReq) data = r.dataset.role === 'technician' ? { en, role: 'engineer', status: 'active' } : { en, status: 'active' };
         else {
           const team = $('[data-k="team"]', r).value, groupId = $('[data-k="groupId"]', r).value;
-          if (!groupId) return toast('กรุณาเลือกกลุ่มงาน', true);
+          if (!groupId && (activeGroups().length || !isAdmin())) return toast('กรุณาเลือกกลุ่มงาน', true);
+          if (!groupId && !confirm('ยังไม่มีกลุ่มงานในระบบ อนุมัติโดยยังไม่มีกลุ่มไปก่อน? (ภายหลังกำหนดกลุ่มได้ที่แท็บผู้ใช้)')) return;
           if (!team && !confirm('ยังไม่ได้เลือกทีม อนุมัติต่อหรือไม่?')) return;
           data = { en, team, groupId, status: 'active' };
         }
@@ -614,7 +625,7 @@
       const w = L.weekTotals(byU[u.en] || {}, ws, S.cfg);
       if (w.over) overN++;
       pendN += w.pending;
-      body += `<tr><td class="name" title="EN ${esc(u.en)}">${esc(u.nickname || u.name)} <span class="small muted">${esc(u.en)}</span></td>
+      body += `<tr><td class="name" title="EN ${esc(u.en)}">${esc(u.nickname || u.name)} <span class="small muted">${esc(u.en)}${u.status === 'inactive' ? ' · ปิดบัญชี' : ''}</span></td>
         ${w.days.map(x => {
           const e = x.entry;
           if (!e) { const st = L.teamStatus(u.team, x.date); return `<td class="cell" data-en="${esc(u.en)}" data-date="${x.date}"><span class="ph">${st && st !== 'H' ? st : ''}</span></td>`; }
@@ -929,7 +940,9 @@
   const thin = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
 
   async function exportExcel(o) {
-    if (window.liff && liff.isInClient && liff.isInClient()) {
+    let inClient = false;
+    try { inClient = !CFG.DEV_USER && !!(window.liff && liff.isInClient && liff.isInClient()); } catch (e) { inClient = false; }
+    if (inClient) {
       // LINE in-app browser cannot save files reliably → open the same page in the phone's browser
       if (confirm('การดาวน์โหลด Excel ต้องเปิดในเบราว์เซอร์ภายนอก เปิดเลยไหม?')) {
         liff.openWindow({ url: location.href.split('#')[0] + '#' + S.tab, external: true });
