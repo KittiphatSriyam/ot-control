@@ -659,7 +659,7 @@
         <span>รออนุมัติ: <b>${pendN}</b></span><span class="spacer"></span>
         ${groupPicker('g-group')}
         <button class="btn sm" id="g-today">สัปดาห์นี้</button>
-        ${fill.length ? `<button class="btn sm" id="g-fill">⚡ เติมค่า default (${fill.reduce((n, f) => n + f.entries.length, 0)} ช่อง)</button>` : ''}
+        ${fill.length ? `<button class="btn sm" id="g-fill">🤖 Auto-fill (${fill.reduce((n, f) => n + f.entries.length, 0)} ช่อง)</button>` : ''}
         <button class="btn sm primary" id="g-xls">⬇ Excel</button>
       </div>
       <div class="scroll"><table class="grid">
@@ -673,26 +673,28 @@
     $('#g-today').onclick = () => { S.week = L.weekStart(L.todayStr()); rerender(); };
     bindGroupPicker('g-group');
     $('#g-xls').onclick = () => exportExcel({ from: ws, to: we, title: 'Week ' + ws, data: d });
-    if ($('#g-fill')) $('#g-fill').onclick = async () => {
-      const cells = fill.reduce((n, f) => n + f.entries.length, 0);
-      if (!confirm(`บันทึกค่า default ${cells} ช่อง ให้ ${fill.length} คน ในสัปดาห์ ${dShort(ws)}–${dShort(we)} ?\n` +
-        `(เฉพาะช่องที่ยังว่าง · บันทึกโดย Engineer = อนุมัติทันที · ช่องที่ลงไว้แล้วไม่ถูกแก้)`)) return;
-      busy(true);
-      let done = 0;
-      try {
-        for (const f of fill) {
-          await api('saveEntries', { en: f.en, entries: f.entries }, { quiet: true });
-          done++;
-        }
-        toast(`เติมค่า default แล้ว ${done} คน`);
-      } catch (e) {
-        toast(`บันทึกได้ ${done}/${fill.length} คน — ${e.message}`, true);
-      } finally { busy(false); rerender(); }
-    };
+    if ($('#g-fill')) $('#g-fill').onclick = () => runAutoFill(ws, S.groupFilter, rerender);
     $$('td.cell', el).forEach(td => td.onclick = () => {
       const u = d.users.find(x => x.en === td.dataset.en);
       openEntry({ user: u, date: td.dataset.date, entry: (byU[u.en] || {})[td.dataset.date], byDate: byU[u.en] || {}, onSaved: rerender });
     });
+  }
+
+  /**
+   * Server-side auto-fill of the default pattern for one week.
+   * groupId: '' = every group I manage (admin: all) · '__none__' = no group (admin) · otherwise that group.
+   */
+  async function runAutoFill(ws, groupId, after) {
+    const we = L.addDays(ws, 6);
+    const scope = groupId === '__none__' ? 'Technician ที่ยังไม่มีกลุ่ม' : groupId ? 'กลุ่ม ' + groupName(groupId) : (isAdmin() ? 'ทุกกลุ่ม' : 'ทุกกลุ่มที่คุณดูแล');
+    if (!confirm(`🤖 Auto-fill สัปดาห์ ${dShort(ws)}–${dShort(we)} ${ws.slice(0, 4)}\n${scope}\n\n` +
+      `ลงค่า default ตาม Pattern (3.5 / OFF / 10.5 / ออกโอ ไม่เกิน ${S.cfg.weeklyCap} ชม.)\n` +
+      `เฉพาะช่องที่ยังว่าง · ไม่ทับข้อมูลที่ลงไว้ · ถือว่าอนุมัติแล้ว (AUTO)`)) return;
+    try {
+      const r = await api('autoFill', { date: ws, groupId: groupId || '' });
+      toast(r.added ? `Auto-fill แล้ว ${r.added} ช่อง (${r.people} คน)` : 'ไม่มีช่องว่างให้เติม');
+    } catch (e) { toast(e.message, true); }
+    if (after) after();
   }
 
   // ================= ENG: monthly summary =================
@@ -902,6 +904,11 @@
         ${g.status !== 'active' ? '<span class="st rejected">ปิดแล้ว</span>' : '<span class="st approved">เปิดรับสมาชิก</span>'}
         <span class="spacer"></span><span class="small muted">Technician ${g.members} คน</span></div>
       <div class="small" style="margin:6px 0">Engineer: ${g.engineers.map(e => `<span class="chip" style="min-width:0">${esc(e.name)}</span>`).join(' ') || '<span class="muted">-</span>'}</div>
+      <div class="row wrap" style="margin-bottom:8px">
+        <span class="small"><b>🤖 Auto-fill</b></span>
+        <button class="btn sm primary" data-act="af-this">สัปดาห์นี้</button>
+        <button class="btn sm" data-act="af-next">สัปดาห์หน้า</button>
+      </div>
       <div class="row wrap">
         <button class="btn sm" data-act="rename">เปลี่ยนชื่อ</button>
         <button class="btn sm" data-act="engs">จัดการ Engineer</button>
@@ -914,6 +921,9 @@
         <p class="small muted">เช่น "Rework Titivat S", "BL Titivat S" — คุณจะเป็น Engineer ผู้ดูแลกลุ่ม และ Technician จะเลือกกลุ่มนี้ตอนลงทะเบียน</p>
         <div class="row"><input class="in" id="g-name" maxlength="60" placeholder="ชื่อกลุ่มงาน"><button class="btn primary" id="g-create">สร้าง</button></div>
       </div>
+      ${mine.length ? `<div class="card"><div class="row wrap"><b>🤖 Auto-fill ${isAdmin() ? 'ทุกกลุ่ม' : 'ทุกกลุ่มที่ฉันดูแล'}</b><span class="spacer"></span>
+        <button class="btn sm primary" id="af-all-this">สัปดาห์นี้</button><button class="btn sm" id="af-all-next">สัปดาห์หน้า</button></div>
+        <p class="small muted" style="margin:6px 0 0">ลงค่า default ตาม Pattern ให้ Technician ที่ active เฉพาะช่องที่ยังว่าง (ไม่ทับที่ลงไว้) · ถือว่าอนุมัติแล้ว · ระบบรันเองทุกคืน 00:30 อยู่แล้ว ปุ่มนี้ใช้เมื่ออยากให้ขึ้นทันที เช่น เพิ่งอนุมัติคนใหม่</p></div>` : ''}
       <h3 style="margin:14px 2px 8px">${isAdmin() ? 'กลุ่มทั้งหมด' : 'กลุ่มที่ฉันดูแล'} (${mine.length})</h3>
       ${mine.map(card).join('') || '<div class="card muted">ยังไม่มีกลุ่ม</div>'}
       ${others.length ? `<div class="card"><h3>กลุ่มอื่น</h3>${others.map(g => `<div class="small">• <b>${esc(g.name)}</b> — Engineer: ${esc(g.engineers.map(e => e.name).join(', ') || '-')}${g.status !== 'active' ? ' (ปิด)' : ''}</div>`).join('')}</div>` : ''}`;
@@ -924,8 +934,15 @@
       if (!name) return toast('กรุณาตั้งชื่อกลุ่ม', true);
       try { await api('createGroup', { name }); await after('สร้างกลุ่มแล้ว'); } catch (e) { toast(e.message, true); }
     };
+    const thisWeek = L.weekStart(L.todayStr()), nextWeek = L.addDays(thisWeek, 7);
+    if ($('#af-all-this')) {
+      $('#af-all-this').onclick = () => runAutoFill(thisWeek, '');
+      $('#af-all-next').onclick = () => runAutoFill(nextWeek, '');
+    }
     $$('[data-gid]', el).forEach(c => {
       const g = d.groups.find(x => x.id === c.dataset.gid);
+      $('[data-act="af-this"]', c).onclick = () => runAutoFill(thisWeek, g.id);
+      $('[data-act="af-next"]', c).onclick = () => runAutoFill(nextWeek, g.id);
       $('[data-act="rename"]', c).onclick = async () => {
         const name = prompt('ชื่อกลุ่มใหม่', g.name);
         if (!name || name === g.name) return;
