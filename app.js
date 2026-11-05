@@ -611,7 +611,8 @@
   }
 
   async function viewWeek(el) {
-    const ws = S.week, we = L.addDays(ws, 6), days = L.weekDays(ws);
+    const ws = S.week, we = L.addDays(ws, 6), days = L.weekDays(ws), today = L.todayStr();
+    const tc = dd => dd === today ? ' today' : ''; // highlight today's column
     const d = await api('teamData', { from: ws, to: we, groupId: S.groupFilter }, { quiet: true });
     const users = sortUsers(d.users.filter(u => u.role === 'technician' || d.entries.some(e => e.en === u.en)));
     const byU = {}; d.entries.forEach(e => { (byU[e.en] = byU[e.en] || {})[e.date] = e; });
@@ -620,7 +621,7 @@
       const key = (u.groupId || '') + '|' + (u.team || '');
       if (key !== lastKey) {
         lastKey = key;
-        body += `<tr class="teamrow"><td class="name">${esc(groupName(u.groupId))} · ${u.team ? 'Team ' + esc(u.team) : 'ไม่ระบุทีม'}</td>${days.map(dd => `<td class="center">${u.team ? ptBadge(L.teamStatus(u.team, dd)) : ''}</td>`).join('')}<td></td><td></td></tr>`;
+        body += `<tr class="teamrow"><td class="name">${esc(groupName(u.groupId))} · ${u.team ? 'Team ' + esc(u.team) : 'ไม่ระบุทีม'}</td>${days.map(dd => `<td class="center${tc(dd)}">${u.team ? ptBadge(L.teamStatus(u.team, dd)) : ''}</td>`).join('')}<td></td><td></td></tr>`;
       }
       const w = L.weekTotals(byU[u.en] || {}, ws, S.cfg);
       if (w.over) overN++;
@@ -628,8 +629,8 @@
       body += `<tr><td class="name" title="EN ${esc(u.en)}">${esc(u.nickname || u.name)} <span class="small muted">${esc(u.en)}${u.status === 'inactive' ? ' · ปิดบัญชี' : ''}</span></td>
         ${w.days.map(x => {
           const e = x.entry;
-          if (!e) { const st = L.teamStatus(u.team, x.date); return `<td class="cell" data-en="${esc(u.en)}" data-date="${x.date}"><span class="ph">${st && st !== 'H' ? st : ''}</span></td>`; }
-          return `<td class="cell ${e.status}" data-en="${esc(u.en)}" data-date="${x.date}" style="background:${L.cellColor(e) || '#fff'}">${esc(L.cellText(e))}${L.TYPES[e.type].shift && e.type !== 'OT_WD' ? `<span class="sicon">${shiftIcon(e.shift)}</span>` : ''}</td>`;
+          if (!e) { const st = L.teamStatus(u.team, x.date); return `<td class="cell${tc(x.date)}" data-en="${esc(u.en)}" data-date="${x.date}"><span class="ph">${st && st !== 'H' ? st : ''}</span></td>`; }
+          return `<td class="cell ${e.status}${tc(x.date)}" data-en="${esc(u.en)}" data-date="${x.date}" style="background:${L.cellColor(e) || '#fff'}">${esc(L.cellText(e))}${L.TYPES[e.type].shift && e.type !== 'OT_WD' ? `<span class="sicon">${shiftIcon(e.shift)}</span>` : ''}</td>`;
         }).join('')}
         <td class="num">${num(w.normal)}</td><td class="num ${w.over ? 'over' : ''}">${num(w.total)}</td></tr>`;
     });
@@ -642,7 +643,7 @@
         <button class="btn sm" id="g-today">สัปดาห์นี้</button><button class="btn sm primary" id="g-xls">⬇ Excel</button>
       </div>
       <div class="scroll"><table class="grid">
-        <tr><th class="name">NAME</th>${days.map(dd => { const h = L.publicHolidayOn(S.holidays, dd); return `<th class="${h ? 'hol' : ''}" title="${esc(h ? h.name : '')}">${DOW[L.dow(dd)].toUpperCase()}<br>${+dd.slice(8)}</th>`; }).join('')}<th>W/Hrs.</th><th>TOTAL</th></tr>
+        <tr><th class="name">NAME</th>${days.map(dd => { const h = L.publicHolidayOn(S.holidays, dd); return `<th class="${h ? 'hol' : ''}${tc(dd)}" title="${esc((h ? h.name : '') + (dd === today ? ' (วันนี้)' : ''))}">${dd === today ? '<span class="todaytag">วันนี้</span>' : ''}${DOW[L.dow(dd)].toUpperCase()}<br>${+dd.slice(8)}</th>`; }).join('')}<th>W/Hrs.</th><th>TOTAL</th></tr>
         ${body || `<tr><td colspan="10" class="muted">${myGroups().length || isAdmin() ? 'ยังไม่มี Technician ในกลุ่มนี้' : 'คุณยังไม่ได้ดูแลกลุ่มงานใด — ไปที่แท็บ "กลุ่มงาน" เพื่อสร้างกลุ่ม'}</td></tr>`}
       </table></div>
       <p class="small muted">แตะช่องเพื่อแก้ไขแทน (บันทึกโดย Engineer = อนุมัติทันที) · ช่องว่างแสดง Pattern (D/N) เป็นสีเทา</p>
