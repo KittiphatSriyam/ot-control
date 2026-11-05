@@ -301,7 +301,7 @@
         ${behalf ? `<div><b>${esc(uName(u))}</b> · EN ${esc(u.en)}</div>` : ''}
         <div>ทีม ${teamBadge(u.team)} · Pattern: ${st ? ptBadge(st) + ' ' + SHIFT_NAME[st] : '<span class="muted">ไม่ได้ระบุทีม</span>'}</div>
         ${holidayNote(date, u.team) ? `<div class="hol">${holidayNote(date, u.team)}</div>` : ''}
-        ${ex ? `<div>สถานะ: <span class="st ${ex.status}">${STATUS_TH[ex.status]}</span>${ex.reviewNote ? ' — ' + esc(ex.reviewNote) : ''}</div>` : ''}
+        ${ex ? `<div>สถานะ: <span class="st ${ex.status}">${STATUS_TH[ex.status]}</span>${ex.reviewedBy === 'AUTO' ? ' <span class="small muted">🤖 ระบบลงให้อัตโนมัติตาม Pattern</span>' : ''}${ex.reviewNote ? ' — ' + esc(ex.reviewNote) : ''}</div>` : ''}
       </div>
       <label class="f">ประเภท</label>
       <div class="typegrid" id="e-type">${Object.keys(L.TYPES).map(k => {
@@ -425,12 +425,13 @@
               ${hol ? `<div class="hol">${hol}</div>` : ''}</div>
             <span class="muted">›</span></div>`;
         }).join('')}</div>
-        <button class="btn primary block" id="w-fill" style="margin-top:10px">⚡ เติมวันที่ว่างตาม Pattern</button>
+        <p class="small muted" style="margin:10px 0 0">🤖 ระบบลงข้อมูลให้อัตโนมัติทุกคืนตาม Pattern (3.5 / OFF / 10.5 / ออกโอ) — <b>แก้เฉพาะวันที่ไม่ตรง</b> เช่น ลา, สลับกะ, ไม่ได้ทำ OT แล้วรอ Engineer อนุมัติ</p>
+        ${Object.keys(defs).length ? '<button class="btn block" id="w-fill" style="margin-top:8px">⚡ เติมวันที่ว่างตาม Pattern ตอนนี้</button>' : ''}
       </div>
       ${legend()}`;
     $('#w-prev').onclick = () => { S.week = L.addDays(S.week, -7); rerender(); };
     $('#w-next').onclick = () => { S.week = L.addDays(S.week, 7); rerender(); };
-    $('#w-fill').onclick = () => fillWeekFromPattern(ws, by, rerender);
+    if ($('#w-fill')) $('#w-fill').onclick = () => fillWeekFromPattern(ws, by, rerender);
     $$('.days .d').forEach(r => r.onclick = () => openEntry({ user: S.user, date: r.dataset.date, entry: by[r.dataset.date], byDate: by, onSaved: rerender }));
   }
 
