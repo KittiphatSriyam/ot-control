@@ -184,16 +184,58 @@
     return s;
   }
 
-  /** Suggested entries for a week from the pattern (only for days without an entry) */
-  function suggestWeek(team, ws, byDate, holidays) {
+  /** Position of the date in the team's 12-day cycle (0-3 Day, 4-5 off, 6-9 Night, 10-11 off) */
+  function cyclePos(team, s) {
+    const off = TEAM_OFFSET[team];
+    if (off == null) return null;
+    return (((diffDays(fmt(ANCHOR), s) + off) % 12) + 12) % 12;
+  }
+
+  /**
+   * Default entry for one day — what most technicians do (from the 2025-26 Control sheets):
+   *  work day (D/N)            → OT 3.5 on that shift
+   *  1st day of the 2 days off → OFF
+   *  2nd day of the 2 days off → OT 10.5 (shift of the block that starts next)
+   *  team holiday / substitute on a work day → OFF
+   */
+  function defaultEntry(team, s, holidays) {
+    const st = teamStatus(team, s);
+    if (!st) return null;
+    if (st !== 'H' && teamHolidayOn(holidays, team, s)) return { date: s, type: 'OFF', shift: '', hours: 0, note: '' };
+    if (st === 'D' || st === 'N') return { date: s, type: 'OT_WD', shift: st, hours: 3.5, note: '' };
+    const pos = cyclePos(team, s);
+    if (pos === 4 || pos === 10) return { date: s, type: 'OFF', shift: '', hours: 0, note: '' };
+    return { date: s, type: 'OT_HD', shift: pos === 5 ? 'N' : 'D', hours: 10.5, note: '' };
+  }
+
+  /**
+   * Suggested entries for a week (only days without an entry), kept within the weekly cap:
+   * if the week goes over, the suggested OT 3.5 day closest to an OT 10.5 day becomes "ออกโอ" (as in the Excel sheets).
+   */
+  function suggestWeek(team, ws, byDate, holidays, cfg) {
+    cfg = cfg || DEFAULT_CFG;
     const out = [];
     weekDays(ws).forEach(d => {
       if (byDate[d]) return;
-      const st = teamStatus(team, d);
-      if (!st) return;
-      if (st === 'H' || teamHolidayOn(holidays, team, d)) out.push({ date: d, type: 'OFF', shift: '', hours: 0, note: '' });
-      else out.push({ date: d, type: 'OT_WD', shift: st, hours: 3.5, note: '' });
+      const e = defaultEntry(team, d, holidays);
+      if (e) out.push(e);
     });
+    const total = () => {
+      const by = Object.assign({}, byDate);
+      out.forEach(x => { by[x.date] = x; });
+      return weekTotals(by, ws, cfg).total;
+    };
+    const hdDays = weekDays(ws).filter(d => {
+      const e = out.find(x => x.date === d) || byDate[d];
+      return e && e.type === 'OT_HD' && e.status !== 'rejected';
+    });
+    while (total() > cfg.weeklyCap) {
+      const cands = out.filter(x => x.type === 'OT_WD');
+      if (!cands.length) break;
+      const dist = x => hdDays.length ? Math.min(...hdDays.map(h => Math.abs(diffDays(h, x.date)))) : 0;
+      cands.sort((a, b) => dist(a) - dist(b) || (a.date < b.date ? 1 : -1)); // nearest to 10.5; tie → the later day
+      cands[0].type = 'NO_OT'; cands[0].hours = 0;
+    }
     return out;
   }
 
@@ -202,7 +244,7 @@
     toTime, fmt, addDays, dow, diffDays, range, todayStr, monthStr, monthFirst, monthLast, addMonths,
     teamStatus, teamsOn, weekStart, weekDays,
     teamHolidayOn, publicHolidayOn, substituteTeamsOn,
-    cellText, cellColor, dayHours, weekTotals, monthSummary, suggestWeek,
+    cellText, cellColor, dayHours, weekTotals, monthSummary, suggestWeek, defaultEntry, cyclePos,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = lib;
   else root.OTLib = lib;

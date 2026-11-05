@@ -79,6 +79,7 @@ input.in.sm, select.in.sm { padding: 4px 6px; font-size: 13px; }
 .chip { display: inline-block; min-width: 40px; text-align: center; padding: 2px 6px; border-radius: 6px; border: 1px solid #cbd5e1; font-weight: 600; font-size: 13px; }
 .chip.pending { border-style: dashed; border-color: var(--amber); }
 .chip.rejected { text-decoration: line-through; border-color: var(--red); opacity: .7; }
+.chip.sugchip { opacity: .55; border-style: dotted; font-style: italic; }
 .pt { display: inline-block; width: 20px; height: 20px; line-height: 20px; text-align: center; border-radius: 5px; font-size: 11px; font-weight: 700; }
 .pt.D { background: #fff7d6; color: #92400e; } .pt.N { background: #1e3a8a; color: #fff; } .pt.H { background: #e5e7eb; color: #6b7280; }
 .st { font-size: 11px; padding: 1px 6px; border-radius: 999px; }
@@ -125,6 +126,9 @@ table.grid td.cell { min-width: 46px; cursor: pointer; font-weight: 600; positio
 table.grid td.cell.pending { outline: 2px dashed var(--amber); outline-offset: -3px; }
 table.grid td.cell.rejected { text-decoration: line-through; color: var(--red); }
 table.grid td.cell .ph { color: #94a3b8; font-weight: 400; font-size: 11px; }
+/* default value not saved yet: faint tint of its colour + grey italic text */
+table.grid td.cell.sug { background: color-mix(in srgb, var(--sug, #fff) 35%, #fff); }
+table.grid td.cell.sug .ph { font-size: 12px; font-style: italic; color: #64748b; }
 table.grid td.cell .sicon { position: absolute; top: 0; right: 1px; font-size: 9px; }
 table.grid td.over { background: #FF7C80; font-weight: 700; }
 /* today's column in the weekly grid: green header + green side rails, cell colours (Day/Night/OT) stay visible */

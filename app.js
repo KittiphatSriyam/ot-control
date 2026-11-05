@@ -272,18 +272,27 @@
    * opts: { user, date, entry, byDate, onSaved }
    * Technician edits own; engineer edits on behalf (auto-approved).
    */
+  /** {date: defaultEntry} for the empty days of a person's week */
+  function defaultsFor(u, ws, byDate) {
+    const m = {};
+    if (!u || !u.team) return m;
+    L.suggestWeek(u.team, ws, byDate || {}, S.holidays, S.cfg).forEach(x => { m[x.date] = x; });
+    return m;
+  }
+
   function openEntry(opts) {
     const u = opts.user, date = opts.date, ex = opts.entry;
     const behalf = isEng() && u.en !== S.user.en;
     const st = L.teamStatus(u.team, date);
-    const teamHol = L.teamHolidayOn(S.holidays, u.team, date);
+    // default for an empty day = what most technicians do (see L.defaultEntry), kept within the weekly cap
+    const def = ex ? null : (defaultsFor(u, L.weekStart(date), opts.byDate || {})[date] || null);
     const f = {
-      type: ex ? ex.type : (st === 'H' || teamHol ? 'OT_HD' : 'OT_WD'),
-      shift: ex && ex.shift ? ex.shift : (st === 'N' ? 'N' : 'D'),
-      hours: ex ? ex.hours : null,
+      type: ex ? ex.type : (def ? def.type : 'OT_WD'),
+      shift: ex && ex.shift ? ex.shift : (def && def.shift ? def.shift : (st === 'N' ? 'N' : 'D')),
+      hours: ex ? ex.hours : (def ? def.hours : null),
       note: ex ? ex.note : '',
     };
-    if (f.hours == null) f.hours = L.TYPES[f.type].hours;
+    if (f.hours == null || (!ex && !(f.type === 'OT_WD' || f.type === 'OT_HD'))) f.hours = L.TYPES[f.type].hours;
 
     const canDelete = ex && (isEng() || ex.status !== 'approved');
     modal(`
@@ -366,13 +375,13 @@
 
   async function fillWeekFromPattern(ws, byDate, onDone) {
     if (!S.user.team) return toast('ยังไม่ได้กำหนดทีม ติดต่อ Engineer', true);
-    const sug = L.suggestWeek(S.user.team, ws, byDate, S.holidays);
+    const sug = L.suggestWeek(S.user.team, ws, byDate, S.holidays, S.cfg);
     if (!sug.length) return toast('ทุกวันในสัปดาห์นี้มีข้อมูลแล้ว');
     const by = Object.assign({}, byDate);
     sug.forEach(x => { by[x.date] = Object.assign({ status: 'pending' }, x); });
     const w = L.weekTotals(by, ws, S.cfg);
     modal(`<h3>เติมตาม Pattern ทีม ${esc(S.user.team)}</h3>
-      <p class="small muted">เติมเฉพาะวันที่ยังว่าง: วันทำงาน = OT 3.5 ตามกะ, วันหยุด = OFF (แก้ไขทีละวันได้ภายหลัง)</p>
+      <p class="small muted">เติมเฉพาะวันที่ยังว่าง ตามที่ส่วนใหญ่ลง: วันทำงาน = OT 3.5 ตามกะ · หยุดวันแรก = OFF · หยุดวันที่สอง = OT 10.5 · ถ้าเกิน ${S.cfg.weeklyCap} ชม. จะเปลี่ยนวันใกล้ 10.5 เป็น "ออกโอ" (แก้ไขทีละวันได้ภายหลัง)</p>
       ${sug.map(x => `<div class="ap-entry"><span style="width:110px">${DOW[L.dow(x.date)]} ${dShort(x.date)}</span>${chip(Object.assign({ status: 'pending' }, x))} ${shiftIcon(x.shift)}</div>`).join('')}
       <div class="alert ${w.over ? 'err' : 'ok'}">รวมสัปดาห์ ${num(w.total)} / ${S.cfg.weeklyCap} ชม.</div>
       <div class="actions"><button class="btn" id="f-c">ยกเลิก</button><button class="btn primary" id="f-ok">บันทึก ${sug.length} วัน</button></div>`, root => {
@@ -390,6 +399,7 @@
     const by = byDateOf(entries);
     const w = L.weekTotals(by, ws, S.cfg);
     const team = S.user.team;
+    const defs = defaultsFor(S.user, ws, by);
     const tSt = L.teamStatus(team, today);
     const pct = Math.min(100, w.total / S.cfg.weeklyCap * 100);
     el.innerHTML = `
@@ -410,7 +420,7 @@
           return `<div class="d ${d.date === today ? 'today' : ''}" data-date="${d.date}">
             <div class="dt"><b>${DOW[L.dow(d.date)]}</b><span class="small muted">${dShort(d.date)}</span></div>
             ${ptBadge(st)}
-            <div style="flex:1">${chip(d.entry)} ${d.entry && L.TYPES[d.entry.type].shift ? '<span class="small">' + shiftIcon(d.entry.shift) + '</span>' : ''}
+            <div style="flex:1">${d.entry || !defs[d.date] ? chip(d.entry) : `<span class="chip sugchip" style="background:${L.cellColor(defs[d.date]) || '#fff'}">${esc(L.cellText(defs[d.date]))}</span> <span class="small muted">ค่า default</span>`} ${d.entry && L.TYPES[d.entry.type].shift ? '<span class="small">' + shiftIcon(d.entry.shift) + '</span>' : ''}
               ${d.entry && d.entry.status !== 'approved' ? `<span class="st ${d.entry.status}">${STATUS_TH[d.entry.status]}</span>` : ''}
               ${hol ? `<div class="hol">${hol}</div>` : ''}</div>
             <span class="muted">›</span></div>`;
@@ -617,7 +627,10 @@
     const users = sortUsers(d.users.filter(u => u.role === 'technician' || d.entries.some(e => e.en === u.en)));
     const byU = {}; d.entries.forEach(e => { (byU[e.en] = byU[e.en] || {})[e.date] = e; });
     let body = '', lastKey = null, overN = 0, pendN = 0;
+    const fill = []; // [{en, entries}] — defaults for empty cells, used by the "fill defaults" button
     users.forEach(u => {
+      const defs = u.status === 'active' ? defaultsFor(u, ws, byU[u.en] || {}) : {};
+      if (Object.keys(defs).length) fill.push({ en: u.en, name: u.nickname || u.name, entries: Object.values(defs) });
       const key = (u.groupId || '') + '|' + (u.team || '');
       if (key !== lastKey) {
         lastKey = key;
@@ -629,7 +642,11 @@
       body += `<tr><td class="name" title="EN ${esc(u.en)}">${esc(u.nickname || u.name)} <span class="small muted">${esc(u.en)}${u.status === 'inactive' ? ' · ปิดบัญชี' : ''}</span></td>
         ${w.days.map(x => {
           const e = x.entry;
-          if (!e) { const st = L.teamStatus(u.team, x.date); return `<td class="cell${tc(x.date)}" data-en="${esc(u.en)}" data-date="${x.date}"><span class="ph">${st && st !== 'H' ? st : ''}</span></td>`; }
+          if (!e) {
+            // empty → show the default value faintly (not saved yet)
+            const df = defs[x.date];
+            return `<td class="cell sug${tc(x.date)}" data-en="${esc(u.en)}" data-date="${x.date}"${df ? ` style="--sug:${L.cellColor(df) || '#fff'}"` : ''} title="ค่า default (ยังไม่ได้บันทึก)">${df ? `<span class="ph">${esc(L.cellText(df))}</span>` : ''}</td>`;
+          }
           return `<td class="cell ${e.status}${tc(x.date)}" data-en="${esc(u.en)}" data-date="${x.date}" style="background:${L.cellColor(e) || '#fff'}">${esc(L.cellText(e))}${L.TYPES[e.type].shift && e.type !== 'OT_WD' ? `<span class="sicon">${shiftIcon(e.shift)}</span>` : ''}</td>`;
         }).join('')}
         <td class="num">${num(w.normal)}</td><td class="num ${w.over ? 'over' : ''}">${num(w.total)}</td></tr>`;
@@ -640,19 +657,37 @@
         <span>เกิน ${S.cfg.weeklyCap} ชม.: <b style="color:${overN ? 'var(--red)' : 'inherit'}">${overN} คน</b></span>
         <span>รออนุมัติ: <b>${pendN}</b></span><span class="spacer"></span>
         ${groupPicker('g-group')}
-        <button class="btn sm" id="g-today">สัปดาห์นี้</button><button class="btn sm primary" id="g-xls">⬇ Excel</button>
+        <button class="btn sm" id="g-today">สัปดาห์นี้</button>
+        ${fill.length ? `<button class="btn sm" id="g-fill">⚡ เติมค่า default (${fill.reduce((n, f) => n + f.entries.length, 0)} ช่อง)</button>` : ''}
+        <button class="btn sm primary" id="g-xls">⬇ Excel</button>
       </div>
       <div class="scroll"><table class="grid">
         <tr><th class="name">NAME</th>${days.map(dd => { const h = L.publicHolidayOn(S.holidays, dd); return `<th class="${h ? 'hol' : ''}${tc(dd)}" title="${esc((h ? h.name : '') + (dd === today ? ' (วันนี้)' : ''))}">${dd === today ? '<span class="todaytag">วันนี้</span>' : ''}${DOW[L.dow(dd)].toUpperCase()}<br>${+dd.slice(8)}</th>`; }).join('')}<th>W/Hrs.</th><th>TOTAL</th></tr>
         ${body || `<tr><td colspan="10" class="muted">${myGroups().length || isAdmin() ? 'ยังไม่มี Technician ในกลุ่มนี้' : 'คุณยังไม่ได้ดูแลกลุ่มงานใด — ไปที่แท็บ "กลุ่มงาน" เพื่อสร้างกลุ่ม'}</td></tr>`}
       </table></div>
-      <p class="small muted">แตะช่องเพื่อแก้ไขแทน (บันทึกโดย Engineer = อนุมัติทันที) · ช่องว่างแสดง Pattern (D/N) เป็นสีเทา</p>
+      <p class="small muted">แตะช่องเพื่อแก้ไขแทน (บันทึกโดย Engineer = อนุมัติทันที) · ช่องตัวเลขจาง = ค่า default ที่ยังไม่ได้บันทึก (วันทำงาน 3.5 · หยุดวันแรก OFF · หยุดวันที่สอง 10.5 · เกิน ${S.cfg.weeklyCap} ชม. → ออกโอ) · แถวหัวทีม D = กะเช้า, N = กะดึก, H = วันหยุดตาม Pattern</p>
     </div>${legend()}`;
     $('#g-prev').onclick = () => { S.week = L.addDays(S.week, -7); rerender(); };
     $('#g-next').onclick = () => { S.week = L.addDays(S.week, 7); rerender(); };
     $('#g-today').onclick = () => { S.week = L.weekStart(L.todayStr()); rerender(); };
     bindGroupPicker('g-group');
     $('#g-xls').onclick = () => exportExcel({ from: ws, to: we, title: 'Week ' + ws, data: d });
+    if ($('#g-fill')) $('#g-fill').onclick = async () => {
+      const cells = fill.reduce((n, f) => n + f.entries.length, 0);
+      if (!confirm(`บันทึกค่า default ${cells} ช่อง ให้ ${fill.length} คน ในสัปดาห์ ${dShort(ws)}–${dShort(we)} ?\n` +
+        `(เฉพาะช่องที่ยังว่าง · บันทึกโดย Engineer = อนุมัติทันที · ช่องที่ลงไว้แล้วไม่ถูกแก้)`)) return;
+      busy(true);
+      let done = 0;
+      try {
+        for (const f of fill) {
+          await api('saveEntries', { en: f.en, entries: f.entries }, { quiet: true });
+          done++;
+        }
+        toast(`เติมค่า default แล้ว ${done} คน`);
+      } catch (e) {
+        toast(`บันทึกได้ ${done}/${fill.length} คน — ${e.message}`, true);
+      } finally { busy(false); rerender(); }
+    };
     $$('td.cell', el).forEach(td => td.onclick = () => {
       const u = d.users.find(x => x.en === td.dataset.en);
       openEntry({ user: u, date: td.dataset.date, entry: (byU[u.en] || {})[td.dataset.date], byDate: byU[u.en] || {}, onSaved: rerender });
