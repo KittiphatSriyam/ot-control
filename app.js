@@ -14,6 +14,8 @@
     year: L.todayStr().slice(0, 4),
     approvedOnly: false,
     pendingCount: 0,
+    groups: [],
+    groupFilter: '',  // '' = every group I manage
   };
 
   const TH_MONTH = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
@@ -32,9 +34,10 @@
     { id: 'approve', label: 'อนุมัติ' },
     { id: 'week', label: 'ตารางสัปดาห์' },
     { id: 'month', label: 'สรุปรายเดือน' },
-    { id: 'pattern', label: 'Pattern' },
-    { id: 'holiday', label: 'วันหยุด' },
+    { id: 'groups', label: 'กลุ่มงาน' },
     { id: 'users', label: 'ผู้ใช้' },
+    { id: 'pattern', label: 'Pattern' },
+    { id: 'holiday', label: 'วันหยุด', admin: true },
   ];
 
   // ================= utils =================
@@ -45,8 +48,29 @@
   const dShort = s => { const [, m, d] = s.split('-').map(Number); return d + ' ' + TH_MONTH[m - 1]; };
   const dLong = s => DOW[L.dow(s)] + ' ' + dShort(s) + ' ' + s.slice(0, 4);
   const mLabel = m => { const [y, mm] = m.split('-').map(Number); return TH_MONTH_FULL[mm - 1] + ' ' + y; };
-  const isEng = () => S.user && S.user.role === 'engineer';
+  const isEng = () => !!(S.user && S.user.isEngineer);
+  const isAdmin = () => !!(S.user && S.user.isAdmin);
+  const isSuper = () => !!(S.user && S.user.isSuper);
   const uName = u => u ? (u.name || '') + (u.nickname ? ' (' + u.nickname + ')' : '') : '';
+  const groupOf = id => S.groups.find(g => g.id === id) || null;
+  const groupName = id => { const g = groupOf(id); return g ? g.name : (id ? '?' : 'ไม่มีกลุ่ม'); };
+  const myGroups = () => S.groups.filter(g => (S.user.myGroupIds || []).includes(g.id));
+  const activeGroups = () => S.groups.filter(g => g.status === 'active');
+  const roleLabel = u => u.isSuper ? 'Super Admin' : (u.isAdmin || u.role === 'admin') ? 'Admin' : u.role === 'engineer' ? 'Engineer' : 'Technician';
+  const ROLE_TH = { technician: 'Technician', engineer: 'Engineer', admin: 'Admin' };
+  function groupPicker(id) {
+    const gs = myGroups();
+    if (!gs.length && !isAdmin()) return '';
+    return `<select class="in sm" id="${id}" style="width:auto;max-width:60vw">
+      <option value="">${isAdmin() ? 'ทุกกลุ่ม' : 'ทุกกลุ่มที่ฉันดูแล'}</option>
+      ${gs.map(g => `<option value="${esc(g.id)}" ${S.groupFilter === g.id ? 'selected' : ''}>${esc(g.name)}${g.status !== 'active' ? ' (ปิด)' : ''}</option>`).join('')}
+      ${isAdmin() ? `<option value="__none__" ${S.groupFilter === '__none__' ? 'selected' : ''}>— ไม่มีกลุ่ม —</option>` : ''}
+    </select>`;
+  }
+  function bindGroupPicker(id) {
+    const el = document.getElementById(id);
+    if (el) el.onchange = () => { S.groupFilter = el.value; renderTab(); };
+  }
   const teamBadge = t => t ? `<span class="team" style="background:${C.TEAM[t]};color:${C.TEAM_TEXT[t]}">${esc(t)}</span>` : '<span class="muted">-</span>';
   const ptBadge = st => st ? `<span class="pt ${st}" title="${SHIFT_NAME[st]}">${st}</span>` : '';
   const shiftIcon = sh => sh === 'N' ? '🌙' : sh === 'D' ? '☀️' : '';
@@ -133,6 +157,7 @@
   async function loadMe() {
     const d = await api('me');
     S.user = d.user; S.cfg = d.config || L.DEFAULT_CFG; S.holidays = d.holidays || []; S.lineUserId = d.lineUserId;
+    S.groups = d.groups || [];
     if (!S.user) return renderRegister();
     if (S.user.status !== 'active') return renderWaiting();
     renderShell();
@@ -151,25 +176,37 @@
       <main><div class="card">
         <h2>ลงทะเบียนผูกบัญชี LINE</h2>
         ${lineCard()}
-        <p class="small muted">กรอก EN ของคุณเพื่อผูกกับบัญชี LINE นี้ (ทำครั้งเดียว) จากนั้น Engineer จะอนุมัติ</p>
+        <p class="small muted">กรอก EN ของคุณเพื่อผูกกับบัญชี LINE นี้ (ทำครั้งเดียว) จากนั้น Engineer ของกลุ่มจะอนุมัติ</p>
         <label class="f">EN (รหัสพนักงาน) *</label><input class="in" id="r-en" inputmode="numeric" placeholder="เช่น 535884">
         <label class="f">ชื่อ-นามสกุล (อังกฤษ)</label><input class="in" id="r-name" placeholder="เช่น Oatsadawut S.">
         <label class="f">ชื่อเล่น</label><input class="in" id="r-nick">
-        <label class="f">ทีม</label>
-        <div class="seg" id="r-team">${L.TEAMS.map(t => `<button data-v="${t}">Team ${t}</button>`).join('')}</div>
+        <div id="r-techbox">
+          <label class="f">กลุ่มงาน *</label>
+          ${activeGroups().length ? `<select class="in" id="r-group"><option value="">— เลือกกลุ่มงาน —</option>
+            ${activeGroups().map(g => `<option value="${esc(g.id)}">${esc(g.name)}${g.engineers.length ? ' · Eng. ' + esc(g.engineers.map(e => e.name).join(', ')) : ''}</option>`).join('')}</select>`
+            : '<div class="alert warn">ยังไม่มีกลุ่มงาน — รอ Engineer สร้างกลุ่มก่อน แล้วค่อยลงทะเบียน</div>'}
+          <label class="f">ทีม (กะตาม Pattern 4W2H) *</label>
+          <div class="seg" id="r-team">${L.TEAMS.map(t => `<button data-v="${t}">Team ${t}</button>`).join('')}</div>
+        </div>
         <label class="f">เบอร์โทร</label><input class="in" id="r-phone" inputmode="tel">
+        <label class="row" style="margin-top:12px"><input type="checkbox" id="r-eng" style="width:20px;height:20px"> <span>ฉันเป็น <b>Engineer</b> (รอ Admin อนุมัติ)</span></label>
         <div id="r-msg"></div>
         <button class="btn primary block" id="r-go" style="margin-top:14px">ลงทะเบียน</button>
       </div></main>`;
     let team = '';
     $$('#r-team button').forEach(b => b.onclick = () => { team = b.dataset.v; $$('#r-team button').forEach(x => x.classList.toggle('on', x === b)); });
+    $('#r-eng').onchange = e => $('#r-techbox').classList.toggle('hidden', e.target.checked);
     $('#r-go').onclick = async () => {
       const en = $('#r-en').value.trim();
-      if (!/^\d{4,8}$/.test(en)) { $('#r-msg').innerHTML = '<div class="alert err">กรุณากรอก EN เป็นตัวเลข</div>'; return; }
+      const wantEngineer = $('#r-eng').checked;
+      const groupId = $('#r-group') ? $('#r-group').value : '';
+      const msg = t => { $('#r-msg').innerHTML = `<div class="alert err">${esc(t)}</div>`; };
+      if (!/^\d{4,8}$/.test(en)) return msg('กรุณากรอก EN เป็นตัวเลข');
+      // group/team requirements are checked by the server (the Super Admin needs neither)
       try {
-        await api('register', { en, name: $('#r-name').value.trim(), nickname: $('#r-nick').value.trim(), team, phone: $('#r-phone').value.trim() });
+        await api('register', { en, name: $('#r-name').value.trim(), nickname: $('#r-nick').value.trim(), team, groupId, wantEngineer, phone: $('#r-phone').value.trim() });
         await loadMe();
-      } catch (e) { $('#r-msg').innerHTML = `<div class="alert err">${esc(e.message)}</div>`; }
+      } catch (e) { msg(e.message); }
     };
   }
 
@@ -179,8 +216,9 @@
       <div class="top"><div class="bar"><span class="title">OT Control</span></div></div>
       <main><div class="card warn">
         ${lineCard()}
-        <h2>${u.status === 'inactive' ? 'บัญชีถูกปิดการใช้งาน' : 'รอ Engineer อนุมัติ'}</h2>
+        <h2>${u.status === 'inactive' ? 'บัญชีถูกปิดการใช้งาน' : u.requestedRole === 'engineer' ? 'รอ Admin อนุมัติเป็น Engineer' : 'รอ Engineer ของกลุ่มอนุมัติ'}</h2>
         <p>EN <b>${esc(u.en)}</b> ${esc(uName(u))} ผูกกับ LINE นี้แล้ว</p>
+        ${u.requestedRole !== 'engineer' && u.groupId ? `<p>กลุ่ม <b>${esc(groupName(u.groupId))}</b> · ทีม ${teamBadge(u.team)}</p>` : ''}
         <p class="small muted">เมื่อได้รับการอนุมัติ กดปุ่มด้านล่างเพื่อเข้าใช้งาน</p>
         <button class="btn primary block" id="w-re">ตรวจสอบอีกครั้ง</button>
       </div></main>`;
@@ -188,7 +226,7 @@
   }
 
   // ================= shell =================
-  function tabs() { return isEng() ? ENG_TABS : TECH_TABS; }
+  function tabs() { return isEng() ? ENG_TABS.filter(t => !t.admin || isAdmin()) : TECH_TABS; }
 
   function renderShell() {
     const u = S.user;
@@ -199,7 +237,7 @@
       <div class="top">
         <div class="bar">
           <span class="title">OT Control</span>
-          <div class="who">${esc(u.nickname || u.name || '')} ${teamBadge(u.team)}<br><span style="opacity:.85">EN ${esc(u.en)} · ${isEng() ? 'Engineer' : 'Technician'}</span></div>
+          <div class="who">${esc(u.nickname || u.name || '')} ${isEng() ? '' : teamBadge(u.team)}<br><span style="opacity:.85">EN ${esc(u.en)} · ${roleLabel(u)}${!isEng() && u.groupId ? ' · ' + esc(groupName(u.groupId)) : ''}</span></div>
           ${S.profile && S.profile.pictureUrl ? `<img src="${esc(S.profile.pictureUrl)}" alt="" style="width:34px;height:34px;border-radius:50%">` : ''}
         </div>
         <nav class="tabs">${list.map(t => `<button data-tab="${t.id}" class="${t.id === S.tab ? 'on' : ''}">${t.label}${t.id === 'approve' && S.pendingCount ? `<span class="badge">${S.pendingCount}</span>` : ''}</button>`).join('')}</nav>
@@ -212,7 +250,7 @@
   async function renderTab() {
     const el = $('#view');
     el.innerHTML = '<div class="splash" style="min-height:40vh"><div class="spinner"></div></div>';
-    const views = { home: viewHome, cal: viewCal, req: viewReq, pattern: viewPattern, approve: viewApprove, week: viewWeek, month: viewMonth, holiday: viewHoliday, users: viewUsers };
+    const views = { home: viewHome, cal: viewCal, req: viewReq, pattern: viewPattern, approve: viewApprove, week: viewWeek, month: viewMonth, holiday: viewHoliday, users: viewUsers, groups: viewGroups };
     try { await views[S.tab](el); } catch (e) {
       el.innerHTML = `<div class="card err">${esc(e.message)}</div>`;
     }
@@ -471,7 +509,7 @@
     const $tabBadge = $('.tabs button[data-tab="approve"]');
     if ($tabBadge) $tabBadge.innerHTML = 'อนุมัติ' + (S.pendingCount ? `<span class="badge">${S.pendingCount}</span>` : '');
     const users = {}; d.users.forEach(u => { users[u.en] = u; });
-    const pUsers = d.users.filter(u => u.status === 'pending' && u.linked);
+    const pUsers = d.registrations || [];
     const groups = {};
     d.entries.forEach(e => { (groups[e.en] = groups[e.en] || []).push(e); });
     const ctxBy = {};
@@ -479,14 +517,23 @@
 
     let html = '';
     if (pUsers.length) {
-      html += `<div class="card warn"><h3>ผู้ลงทะเบียนใหม่ (${pUsers.length})</h3>${pUsers.map(u => `
-        <div class="ap-entry" data-en="${esc(u.en)}">
-          <div style="flex:1"><b>EN ${esc(u.en)}</b> ${esc(uName(u))}<div class="small muted">LINE: ${esc(u.lineName || '-')} ${u.phone ? '· ' + esc(u.phone) : ''}</div></div>
+      const gOpts = u => (isAdmin() ? activeGroups() : myGroups().filter(g => g.status === 'active'))
+        .map(g => `<option value="${esc(g.id)}" ${u.groupId === g.id ? 'selected' : ''}>${esc(g.name)}</option>`).join('');
+      html += `<div class="card warn"><h3>ผู้ลงทะเบียนใหม่ (${pUsers.length})</h3>${pUsers.map(u => (u.requestedRole === 'engineer' || u.role !== 'technician') ? `
+        <div class="ap-entry" data-en="${esc(u.en)}" data-kind="eng" data-role="${esc(u.role)}">
+          <div style="flex:1"><b>EN ${esc(u.en)}</b> ${esc(uName(u))} <span class="st pending">${u.role === 'technician' ? 'ขอเป็น Engineer' : ROLE_TH[u.role] || u.role}</span>
+            <div class="small muted">LINE: ${esc(u.lineName || '-')} ${u.phone ? '· ' + esc(u.phone) : ''}</div></div>
+          <button class="btn sm primary" data-act="ok">อนุมัติเป็น Engineer</button><button class="btn sm danger" data-act="no">ปฏิเสธ</button>
+        </div>` : `
+        <div class="ap-entry" data-en="${esc(u.en)}" data-kind="tech" style="flex-wrap:wrap">
+          <div style="flex:1 1 180px"><b>EN ${esc(u.en)}</b> ${esc(uName(u))}<div class="small muted">LINE: ${esc(u.lineName || '-')} ${u.phone ? '· ' + esc(u.phone) : ''}</div></div>
+          <select class="in sm" style="width:auto" data-k="groupId">${gOpts(u)}</select>
           <select class="in sm" style="width:auto" data-k="team">${['', 'A', 'B', 'C'].map(t => `<option value="${t}" ${u.team === t ? 'selected' : ''}>${t ? 'Team ' + t : 'ทีม?'}</option>`).join('')}</select>
           <button class="btn sm primary" data-act="ok">อนุมัติ</button><button class="btn sm danger" data-act="no">ปฏิเสธ</button>
         </div>`).join('')}</div>`;
     }
-    const ens = Object.keys(groups).sort((a, b) => ((users[a] || {}).team || 'Z').localeCompare((users[b] || {}).team || 'Z') || a.localeCompare(b));
+    const ens = Object.keys(groups).sort((a, b) => groupName((users[a] || {}).groupId).localeCompare(groupName((users[b] || {}).groupId)) ||
+      ((users[a] || {}).team || 'Z').localeCompare((users[b] || {}).team || 'Z') || a.localeCompare(b));
     if (!ens.length) html += '<div class="card"><p class="muted">✅ ไม่มีรายการรออนุมัติ</p></div>';
     else html += `<div class="card"><div class="row wrap"><b>รออนุมัติ ${d.entries.length} รายการ จาก ${ens.length} คน</b><span class="spacer"></span>
       <button class="btn sm" id="a-all">เลือกทั้งหมด</button>
@@ -496,7 +543,7 @@
       const list = groups[en].sort((a, b) => a.date < b.date ? -1 : 1);
       const weeks = {};
       list.forEach(e => { (weeks[L.weekStart(e.date)] = weeks[L.weekStart(e.date)] || []).push(e); });
-      html += `<div class="card"><div class="row"><b>${esc(uName(u))}</b> ${teamBadge(u.team)} <span class="small muted">EN ${esc(en)}</span></div>`;
+      html += `<div class="card"><div class="row wrap"><b>${esc(uName(u))}</b> ${teamBadge(u.team)} <span class="small muted">EN ${esc(en)} · ${esc(groupName(u.groupId))}</span></div>`;
       Object.keys(weeks).sort().forEach(ws => {
         const w = L.weekTotals(ctxBy[en] || {}, ws, S.cfg);
         html += `<div class="wk ${w.over ? 'over' : ''}">สัปดาห์ ${dShort(ws)}–${dShort(L.addDays(ws, 6))}: รวม ${num(w.total)} / ${S.cfg.weeklyCap} ชม.${w.over ? ' ⚠️ เกิน' : ''}</div>`;
@@ -513,14 +560,21 @@
 
     $$('[data-en]', el).forEach(r => {
       const en = r.dataset.en;
+      const isEngReq = r.dataset.kind === 'eng';
       $('[data-act="ok"]', r).onclick = async () => {
-        const team = $('[data-k="team"]', r).value;
-        if (!team && !confirm('ยังไม่ได้เลือกทีม อนุมัติต่อหรือไม่?')) return;
-        try { await api('updateUser', { en, team, status: 'active' }); toast('อนุมัติผู้ใช้แล้ว'); rerender(); } catch (e) { toast(e.message, true); }
+        let data;
+        if (isEngReq) data = r.dataset.role === 'technician' ? { en, role: 'engineer', status: 'active' } : { en, status: 'active' };
+        else {
+          const team = $('[data-k="team"]', r).value, groupId = $('[data-k="groupId"]', r).value;
+          if (!groupId) return toast('กรุณาเลือกกลุ่มงาน', true);
+          if (!team && !confirm('ยังไม่ได้เลือกทีม อนุมัติต่อหรือไม่?')) return;
+          data = { en, team, groupId, status: 'active' };
+        }
+        try { await api('updateUser', data); toast(isEngReq ? 'แต่งตั้งเป็น Engineer แล้ว' : 'อนุมัติผู้ใช้แล้ว'); rerender(); } catch (e) { toast(e.message, true); }
       };
       $('[data-act="no"]', r).onclick = async () => {
         if (!confirm('ปฏิเสธและยกเลิกการผูก LINE ของ EN ' + en + ' ?')) return;
-        try { await api('updateUser', { en, unlink: true, status: 'inactive' }); toast('ปฏิเสธแล้ว'); rerender(); } catch (e) { toast(e.message, true); }
+        try { await api('updateUser', Object.assign({ en, unlink: true, status: 'inactive' }, isEngReq && r.dataset.role === 'technician' ? { role: 'technician' } : {})); toast('ปฏิเสธแล้ว'); rerender(); } catch (e) { toast(e.message, true); }
       };
     });
     const sel = () => $$('.a-cb', el).filter(c => c.checked).map(c => c.value);
@@ -541,19 +595,21 @@
 
   // ================= ENG: weekly grid =================
   function sortUsers(users) {
-    return users.slice().sort((a, b) => (a.team || 'Z').localeCompare(b.team || 'Z') || (a.name || '').localeCompare(b.name || ''));
+    return users.slice().sort((a, b) => groupName(a.groupId).localeCompare(groupName(b.groupId)) ||
+      (a.team || 'Z').localeCompare(b.team || 'Z') || (a.name || '').localeCompare(b.name || ''));
   }
 
   async function viewWeek(el) {
     const ws = S.week, we = L.addDays(ws, 6), days = L.weekDays(ws);
-    const d = await api('teamData', { from: ws, to: we }, { quiet: true });
-    const users = sortUsers(d.users.filter(u => u.role !== 'engineer' || d.entries.some(e => e.en === u.en)));
+    const d = await api('teamData', { from: ws, to: we, groupId: S.groupFilter }, { quiet: true });
+    const users = sortUsers(d.users.filter(u => u.role === 'technician' || d.entries.some(e => e.en === u.en)));
     const byU = {}; d.entries.forEach(e => { (byU[e.en] = byU[e.en] || {})[e.date] = e; });
-    let body = '', lastTeam = null, overN = 0, pendN = 0;
+    let body = '', lastKey = null, overN = 0, pendN = 0;
     users.forEach(u => {
-      if (u.team !== lastTeam) {
-        lastTeam = u.team;
-        body += `<tr class="teamrow"><td class="name">${u.team ? 'Team ' + esc(u.team) : 'ไม่ระบุทีม'}</td>${days.map(dd => `<td class="center">${u.team ? ptBadge(L.teamStatus(u.team, dd)) : ''}</td>`).join('')}<td></td><td></td></tr>`;
+      const key = (u.groupId || '') + '|' + (u.team || '');
+      if (key !== lastKey) {
+        lastKey = key;
+        body += `<tr class="teamrow"><td class="name">${esc(groupName(u.groupId))} · ${u.team ? 'Team ' + esc(u.team) : 'ไม่ระบุทีม'}</td>${days.map(dd => `<td class="center">${u.team ? ptBadge(L.teamStatus(u.team, dd)) : ''}</td>`).join('')}<td></td><td></td></tr>`;
       }
       const w = L.weekTotals(byU[u.en] || {}, ws, S.cfg);
       if (w.over) overN++;
@@ -571,17 +627,19 @@
       <div class="row wrap small" style="margin-bottom:8px">
         <span>เกิน ${S.cfg.weeklyCap} ชม.: <b style="color:${overN ? 'var(--red)' : 'inherit'}">${overN} คน</b></span>
         <span>รออนุมัติ: <b>${pendN}</b></span><span class="spacer"></span>
+        ${groupPicker('g-group')}
         <button class="btn sm" id="g-today">สัปดาห์นี้</button><button class="btn sm primary" id="g-xls">⬇ Excel</button>
       </div>
       <div class="scroll"><table class="grid">
         <tr><th class="name">NAME</th>${days.map(dd => { const h = L.publicHolidayOn(S.holidays, dd); return `<th class="${h ? 'hol' : ''}" title="${esc(h ? h.name : '')}">${DOW[L.dow(dd)].toUpperCase()}<br>${+dd.slice(8)}</th>`; }).join('')}<th>W/Hrs.</th><th>TOTAL</th></tr>
-        ${body || '<tr><td colspan="10" class="muted">ยังไม่มีผู้ใช้</td></tr>'}
+        ${body || `<tr><td colspan="10" class="muted">${myGroups().length || isAdmin() ? 'ยังไม่มี Technician ในกลุ่มนี้' : 'คุณยังไม่ได้ดูแลกลุ่มงานใด — ไปที่แท็บ "กลุ่มงาน" เพื่อสร้างกลุ่ม'}</td></tr>`}
       </table></div>
       <p class="small muted">แตะช่องเพื่อแก้ไขแทน (บันทึกโดย Engineer = อนุมัติทันที) · ช่องว่างแสดง Pattern (D/N) เป็นสีเทา</p>
     </div>${legend()}`;
     $('#g-prev').onclick = () => { S.week = L.addDays(S.week, -7); rerender(); };
     $('#g-next').onclick = () => { S.week = L.addDays(S.week, 7); rerender(); };
     $('#g-today').onclick = () => { S.week = L.weekStart(L.todayStr()); rerender(); };
+    bindGroupPicker('g-group');
     $('#g-xls').onclick = () => exportExcel({ from: ws, to: we, title: 'Week ' + ws, data: d });
     $$('td.cell', el).forEach(td => td.onclick = () => {
       const u = d.users.find(x => x.en === td.dataset.en);
@@ -593,13 +651,13 @@
   async function monthData(m) {
     const first = L.monthFirst(m), last = L.monthLast(m);
     const from = L.weekStart(first), to = L.addDays(L.weekStart(last), 6);
-    const d = await api('teamData', { from, to }, { quiet: true });
+    const d = await api('teamData', { from, to, groupId: S.groupFilter }, { quiet: true });
     return { from, to, d };
   }
 
   function summaries(d, m) {
     const byU = {}; d.entries.forEach(e => { (byU[e.en] = byU[e.en] || []).push(e); });
-    return sortUsers(d.users).filter(u => u.role !== 'engineer' || byU[u.en])
+    return sortUsers(d.users).filter(u => u.role === 'technician' || byU[u.en])
       .map(u => ({ u, s: L.monthSummary(byU[u.en] || [], m, S.cfg, { approvedOnly: S.approvedOnly }) }));
   }
 
@@ -612,16 +670,17 @@
       <div class="nav"><button class="btn" id="m-prev">‹</button><div class="label">สรุป OT ${mLabel(m)}</div><button class="btn" id="m-next">›</button></div>
       <div class="row wrap small" style="margin-bottom:8px">
         <label><input type="checkbox" id="m-appr" ${S.approvedOnly ? 'checked' : ''}> นับเฉพาะที่อนุมัติแล้ว</label><span class="spacer"></span>
+        ${groupPicker('m-group')}
         <button class="btn sm primary" id="m-xls">⬇ Excel ทั้งเดือน</button></div>
       <div class="scroll"><table class="grid">
-        <tr><th class="name">ชื่อ</th><th>ทีม</th><th>OT วันทำงาน<br>(วัน)</th><th>OT วันทำงาน<br>(ชม.)</th><th>OT วันหยุด<br>OT300 (วัน)</th><th>OT วันหยุด<br>(ชม.)</th>
+        <tr><th class="name">ชื่อ</th><th>กลุ่ม</th><th>ทีม</th><th>OT วันทำงาน<br>(วัน)</th><th>OT วันทำงาน<br>(ชม.)</th><th>OT วันหยุด<br>OT300 (วัน)</th><th>OT วันหยุด<br>(ชม.)</th>
           <th>รวม OT<br>(ชม.)</th><th>ออกโอ</th><th>☀️ Day</th><th>🌙 Night</th><th>AL</th><th>SL</th><th>ลากิจ</th><th>สัปดาห์<br>เกิน ${S.cfg.weeklyCap}</th><th>สูงสุด<br>/สัปดาห์</th><th>รอ<br>อนุมัติ</th></tr>
-        ${rows.map(({ u, s }) => `<tr><td class="name">${esc(uName(u))}<br><span class="small muted">EN ${esc(u.en)}</span></td><td>${teamBadge(u.team)}</td>
+        ${rows.map(({ u, s }) => `<tr><td class="name">${esc(uName(u))}<br><span class="small muted">EN ${esc(u.en)}</span></td><td>${esc(groupName(u.groupId))}</td><td>${teamBadge(u.team)}</td>
           <td class="num">${s.otWdDays}</td><td class="num">${num(s.otWdHours)}</td><td class="num">${s.otHdDays}</td><td class="num">${num(s.otHdHours)}</td>
           <td class="num"><b>${num(s.otWdHours + s.otHdHours)}</b></td><td class="num">${s.noOtDays}</td><td class="num">${s.dayShifts}</td><td class="num">${s.nightShifts}</td>
           <td class="num">${s.AL}</td><td class="num">${s.SL}</td><td class="num">${s.PL}</td>
           <td class="num ${s.weeksOver ? 'bad' : ''}">${s.weeksOver}</td><td class="num ${s.maxWeek > S.cfg.weeklyCap ? 'bad' : ''}">${num(s.maxWeek)}</td><td class="num">${s.pending || ''}</td></tr>`).join('')}
-        <tr style="font-weight:700;background:#f1f5f9"><td class="name">รวม</td><td></td><td class="num">${tot.otWdDays || 0}</td><td class="num">${num(tot.otWdHours || 0)}</td><td class="num">${tot.otHdDays || 0}</td><td class="num">${num(tot.otHdHours || 0)}</td>
+        <tr style="font-weight:700;background:#f1f5f9"><td class="name">รวม</td><td></td><td></td><td class="num">${tot.otWdDays || 0}</td><td class="num">${num(tot.otWdHours || 0)}</td><td class="num">${tot.otHdDays || 0}</td><td class="num">${num(tot.otHdHours || 0)}</td>
           <td class="num">${num((tot.otWdHours || 0) + (tot.otHdHours || 0))}</td><td class="num">${tot.noOtDays || 0}</td><td class="num">${tot.dayShifts || 0}</td><td class="num">${tot.nightShifts || 0}</td>
           <td class="num">${tot.AL || 0}</td><td class="num">${tot.SL || 0}</td><td class="num">${tot.PL || 0}</td><td class="num">${tot.weeksOver || 0}</td><td></td><td class="num">${tot.pending || 0}</td></tr>
       </table></div>
@@ -630,6 +689,7 @@
     $('#m-prev').onclick = () => { S.month = L.addMonths(S.month, -1); rerender(); };
     $('#m-next').onclick = () => { S.month = L.addMonths(S.month, 1); rerender(); };
     $('#m-appr').onchange = e => { S.approvedOnly = e.target.checked; rerender(); };
+    bindGroupPicker('m-group');
     $('#m-xls').onclick = () => exportExcel({ from, to, month: m, title: 'OT ' + m, data: d });
   }
 
@@ -720,31 +780,134 @@
   }
 
   // ================= ENG: users =================
+  async function refreshMe() {
+    const d = await api('me', {}, { quiet: true });
+    S.user = d.user; S.groups = d.groups || []; S.holidays = d.holidays || [];
+  }
+
   async function viewUsers(el) {
-    const users = sortUsers(await api('users', {}, { quiet: true }));
-    el.innerHTML = `<div class="card"><h3>ผู้ใช้ (${users.length})</h3>
-      <p class="small muted">ผู้ใช้ลงทะเบียนเองผ่าน LINE ด้วย EN · เปลี่ยนเครื่อง/เปลี่ยน LINE ให้กด "ยกเลิกผูก LINE" แล้วให้ลงทะเบียนใหม่</p>
+    const all = await api('users', {}, { quiet: true });
+    const users = all.filter(u => u.en !== S.user.en);
+    const engineers = users.filter(u => u.role !== 'technician' || u.isAdmin)
+      .sort((a, b) => (b.isSuper - a.isSuper) || (b.isAdmin - a.isAdmin) || (a.name || '').localeCompare(b.name || ''));
+    const techs = sortUsers(users.filter(u => !(u.role !== 'technician' || u.isAdmin)));
+    const gChoices = isAdmin() ? S.groups.filter(g => g.status === 'active') : myGroups().filter(g => g.status === 'active');
+    const statusSel = u => `<select class="in sm" data-k="status">${['active', 'pending', 'inactive'].map(s => `<option ${u.status === s ? 'selected' : ''}>${s}</option>`).join('')}</select>`;
+    const roleCell = u => isAdmin() && u.canEdit && !u.isSuper
+      ? `<select class="in sm" data-k="role">${(isSuper() ? ['technician', 'engineer', 'admin'] : ['technician', 'engineer'])
+          .map(r => `<option value="${r}" ${u.role === r ? 'selected' : ''}>${ROLE_TH[r]}</option>`).join('')}</select>`
+      : roleLabel(u);
+    const lineCell = u => u.linked ? '✅ ' + esc(u.lineName || '') : '<span class="muted">ยังไม่ผูก</span>';
+    const actions = u => `<button class="btn sm primary" data-act="save">บันทึก</button> ${u.linked ? '<button class="btn sm danger" data-act="unlink">ยกเลิกผูก LINE</button>' : ''}`;
+
+    el.innerHTML = `
+      <div class="card"><h3>Technician (${techs.length})</h3>
+      <p class="small muted">${isAdmin() ? 'Admin เห็นทุกกลุ่ม' : 'แสดงเฉพาะกลุ่มที่คุณดูแล'} · เปลี่ยนเครื่อง/เปลี่ยน LINE ให้กด "ยกเลิกผูก LINE" แล้วให้ลงทะเบียนใหม่${isAdmin() ? ' · แต่งตั้ง Engineer: เปลี่ยนสิทธิ์เป็น Engineer' : ''}</p>
       <div class="scroll"><table class="grid">
-        <tr><th class="name">ชื่อ</th><th>EN</th><th>LINE</th><th>ทีม</th><th>สิทธิ์</th><th>สถานะ</th><th></th></tr>
-        ${users.map(u => `<tr data-en="${esc(u.en)}">
+        <tr><th class="name">ชื่อ</th><th>EN</th><th>LINE</th><th>กลุ่มงาน</th><th>ทีม</th><th>สิทธิ์</th><th>สถานะ</th><th></th></tr>
+        ${techs.map(u => `<tr data-en="${esc(u.en)}">
           <td class="name">${esc(uName(u))}${u.phone ? `<br><span class="small muted">${esc(u.phone)}</span>` : ''}</td><td>${esc(u.en)}</td>
-          <td>${u.linked ? '✅ ' + esc(u.lineName || '') : '<span class="muted">ยังไม่ผูก</span>'}</td>
+          <td>${lineCell(u)}</td>
+          <td><select class="in sm" data-k="groupId">${isAdmin() ? `<option value="" ${!u.groupId ? 'selected' : ''}>— ไม่มี —</option>` : ''}
+            ${gChoices.concat(u.groupId && !gChoices.some(g => g.id === u.groupId) && groupOf(u.groupId) ? [groupOf(u.groupId)] : [])
+              .map(g => `<option value="${esc(g.id)}" ${u.groupId === g.id ? 'selected' : ''}>${esc(g.name)}</option>`).join('')}</select></td>
           <td><select class="in sm" data-k="team">${['', 'A', 'B', 'C'].map(t => `<option value="${t}" ${u.team === t ? 'selected' : ''}>${t || '-'}</option>`).join('')}</select></td>
-          <td><select class="in sm" data-k="role">${['technician', 'engineer'].map(r => `<option ${u.role === r ? 'selected' : ''}>${r}</option>`).join('')}</select></td>
-          <td><select class="in sm" data-k="status">${['active', 'pending', 'inactive'].map(s => `<option ${u.status === s ? 'selected' : ''}>${s}</option>`).join('')}</select></td>
-          <td><button class="btn sm primary" data-act="save">บันทึก</button> ${u.linked ? '<button class="btn sm danger" data-act="unlink">ยกเลิกผูก LINE</button>' : ''}</td></tr>`).join('')}
-      </table></div></div>`;
+          <td>${roleCell(u)}</td><td>${statusSel(u)}</td><td>${actions(u)}</td></tr>`).join('') || '<tr><td colspan="8" class="muted">ยังไม่มี</td></tr>'}
+      </table></div></div>
+      ${isAdmin() ? `<div class="card"><h3>Engineer / Admin (${engineers.length + 1})</h3>
+      <div class="scroll"><table class="grid">
+        <tr><th class="name">ชื่อ</th><th>EN</th><th>LINE</th><th>ดูแลกลุ่ม</th><th>สิทธิ์</th><th>สถานะ</th><th></th></tr>
+        <tr><td class="name">${esc(uName(S.user))} (คุณ)</td><td>${esc(S.user.en)}</td><td>✅</td><td>ทุกกลุ่ม</td><td>${roleLabel(S.user)}</td><td>active</td><td></td></tr>
+        ${engineers.map(u => `<tr data-en="${esc(u.en)}">
+          <td class="name">${esc(uName(u))}</td><td>${esc(u.en)}</td><td>${lineCell(u)}</td>
+          <td style="text-align:left">${u.isAdmin ? 'ทุกกลุ่ม' : esc(S.groups.filter(g => g.engineers.some(e => e.en === u.en)).map(g => g.name).join(', ') || '-')}</td>
+          <td>${roleCell(u)}</td><td>${u.canEdit ? statusSel(u) : esc(u.status)}</td><td>${u.canEdit ? actions(u) : ''}</td></tr>`).join('')}
+      </table></div>
+      <p class="small muted">ถอด Engineer = เปลี่ยนสิทธิ์เป็น Technician (ระบบจะถอดออกจากทุกกลุ่มที่ดูแล)${isSuper() ? ' · Super Admin เท่านั้นที่แต่งตั้ง/ถอด Admin ได้' : ' · แต่งตั้ง/ถอด Admin ได้เฉพาะ Super Admin'}</p></div>` : ''}`;
     $$('tr[data-en]', el).forEach(r => {
       const en = r.dataset.en;
+      if (!$('[data-act="save"]', r)) return;
       $('[data-act="save"]', r).onclick = async () => {
         const data = { en };
         $$('select', r).forEach(s => { data[s.dataset.k] = s.value; });
-        try { await api('updateUser', data); toast('บันทึกแล้ว'); } catch (e) { toast(e.message, true); }
+        const before = users.find(u => u.en === en);
+        if (data.role && before && data.role !== before.role && !confirm(`เปลี่ยนสิทธิ์ EN ${en} จาก ${ROLE_TH[before.role] || before.role} เป็น ${ROLE_TH[data.role]} ?`)) return;
+        try { await api('updateUser', data); toast('บันทึกแล้ว'); await refreshMe(); rerender(); } catch (e) { toast(e.message, true); }
       };
       const ul = $('[data-act="unlink"]', r);
       if (ul) ul.onclick = async () => {
         if (!confirm('ยกเลิกการผูก LINE ของ EN ' + en + ' ? ผู้ใช้ต้องลงทะเบียนใหม่')) return;
         try { await api('updateUser', { en, unlink: true }); toast('ยกเลิกผูกแล้ว'); rerender(); } catch (e) { toast(e.message, true); }
+      };
+    });
+  }
+
+  // ================= ENG: groups =================
+  async function viewGroups(el) {
+    const d = await api('groups', {}, { quiet: true });
+    S.groups = d.groups;
+    const mineIds = isAdmin() ? d.groups.map(g => g.id) : d.groups.filter(g => g.engineers.some(e => e.en === S.user.en)).map(g => g.id);
+    const mine = d.groups.filter(g => mineIds.includes(g.id));
+    const others = d.groups.filter(g => !mineIds.includes(g.id));
+    const card = g => `<div class="card" data-gid="${esc(g.id)}" style="${g.status !== 'active' ? 'opacity:.7' : ''}">
+      <div class="row wrap"><h3 style="margin:0">${esc(g.name)}</h3>
+        ${g.status !== 'active' ? '<span class="st rejected">ปิดแล้ว</span>' : '<span class="st approved">เปิดรับสมาชิก</span>'}
+        <span class="spacer"></span><span class="small muted">Technician ${g.members} คน</span></div>
+      <div class="small" style="margin:6px 0">Engineer: ${g.engineers.map(e => `<span class="chip" style="min-width:0">${esc(e.name)}</span>`).join(' ') || '<span class="muted">-</span>'}</div>
+      <div class="row wrap">
+        <button class="btn sm" data-act="rename">เปลี่ยนชื่อ</button>
+        <button class="btn sm" data-act="engs">จัดการ Engineer</button>
+        ${isAdmin() ? `<span class="spacer"></span>
+          <button class="btn sm ${g.status === 'active' ? 'danger' : ''}" data-act="toggle">${g.status === 'active' ? 'ปิดกลุ่ม' : 'เปิดกลุ่มอีกครั้ง'}</button>
+          <button class="btn sm dangerfill" data-act="del">ลบ</button>` : ''}
+      </div></div>`;
+    el.innerHTML = `
+      <div class="card"><h3>สร้างกลุ่มงานใหม่</h3>
+        <p class="small muted">เช่น "Rework Titivat S", "BL Titivat S" — คุณจะเป็น Engineer ผู้ดูแลกลุ่ม และ Technician จะเลือกกลุ่มนี้ตอนลงทะเบียน</p>
+        <div class="row"><input class="in" id="g-name" maxlength="60" placeholder="ชื่อกลุ่มงาน"><button class="btn primary" id="g-create">สร้าง</button></div>
+      </div>
+      <h3 style="margin:14px 2px 8px">${isAdmin() ? 'กลุ่มทั้งหมด' : 'กลุ่มที่ฉันดูแล'} (${mine.length})</h3>
+      ${mine.map(card).join('') || '<div class="card muted">ยังไม่มีกลุ่ม</div>'}
+      ${others.length ? `<div class="card"><h3>กลุ่มอื่น</h3>${others.map(g => `<div class="small">• <b>${esc(g.name)}</b> — Engineer: ${esc(g.engineers.map(e => e.name).join(', ') || '-')}${g.status !== 'active' ? ' (ปิด)' : ''}</div>`).join('')}</div>` : ''}`;
+
+    const after = async msg => { toast(msg); await refreshMe(); rerender(); };
+    $('#g-create').onclick = async () => {
+      const name = $('#g-name').value.trim();
+      if (!name) return toast('กรุณาตั้งชื่อกลุ่ม', true);
+      try { await api('createGroup', { name }); await after('สร้างกลุ่มแล้ว'); } catch (e) { toast(e.message, true); }
+    };
+    $$('[data-gid]', el).forEach(c => {
+      const g = d.groups.find(x => x.id === c.dataset.gid);
+      $('[data-act="rename"]', c).onclick = async () => {
+        const name = prompt('ชื่อกลุ่มใหม่', g.name);
+        if (!name || name === g.name) return;
+        try { await api('updateGroup', { id: g.id, name }); await after('เปลี่ยนชื่อแล้ว'); } catch (e) { toast(e.message, true); }
+      };
+      $('[data-act="engs"]', c).onclick = () => {
+        const cur = g.engineers.map(e => e.en);
+        modal(`<h3>Engineer ของกลุ่ม ${esc(g.name)}</h3>
+          <p class="small muted">Engineer ที่ติ๊กจะเห็นและอนุมัติข้อมูลของ Technician ในกลุ่มนี้</p>
+          ${d.engineers.map(e => `<label class="ap-entry"><input type="checkbox" value="${esc(e.en)}" ${cur.includes(e.en) ? 'checked' : ''}> ${esc(uName(e))} <span class="small muted">EN ${esc(e.en)}</span></label>`).join('')}
+          <div class="actions"><button class="btn" id="ge-c">ยกเลิก</button><button class="btn primary" id="ge-ok">บันทึก</button></div>`, root => {
+          $('#ge-c', root).onclick = closeModal;
+          $('#ge-ok', root).onclick = async () => {
+            const engineers = $$('input[type=checkbox]', root).filter(x => x.checked).map(x => x.value);
+            if (!engineers.length) return toast('ต้องมี Engineer อย่างน้อย 1 คน', true);
+            if (!isAdmin() && !engineers.includes(S.user.en) && !confirm('คุณจะไม่ได้ดูแลกลุ่มนี้แล้ว ยืนยัน?')) return;
+            try { await api('updateGroup', { id: g.id, engineers }); closeModal(); await after('บันทึกแล้ว'); } catch (e) { toast(e.message, true); }
+          };
+        });
+      };
+      const tg = $('[data-act="toggle"]', c);
+      if (tg) tg.onclick = async () => {
+        const closing = g.status === 'active';
+        if (closing && !confirm(`ปิดกลุ่ม "${g.name}" ? (Technician ใหม่จะเลือกกลุ่มนี้ไม่ได้ สมาชิกเดิมยังอยู่)`)) return;
+        try { await api('updateGroup', { id: g.id, status: closing ? 'closed' : 'active' }); await after(closing ? 'ปิดกลุ่มแล้ว' : 'เปิดกลุ่มแล้ว'); } catch (e) { toast(e.message, true); }
+      };
+      const del = $('[data-act="del"]', c);
+      if (del) del.onclick = async () => {
+        if (!confirm(`ลบกลุ่ม "${g.name}" ถาวร?`)) return;
+        try { await api('deleteGroup', { id: g.id }); await after('ลบกลุ่มแล้ว'); } catch (e) { toast(e.message, true); }
       };
     });
   }
@@ -779,28 +942,28 @@
       const wb = new ExcelJS.Workbook();
       wb.creator = 'OT Control';
       const byU = {}; o.data.entries.forEach(e => { (byU[e.en] = byU[e.en] || {})[e.date] = e; });
-      const users = sortUsers(o.data.users.filter(u => u.role !== 'engineer' || byU[u.en]));
+      const users = sortUsers(o.data.users.filter(u => u.role === 'technician' || byU[u.en]));
 
       // --- Control sheet: one block per week (Sat–Fri) ---
       const ws1 = wb.addWorksheet('Control', { views: [{ state: 'frozen', xSplit: 3 }] });
-      ws1.columns = [{ width: 8 }, { width: 10 }, { width: 24 }, ...Array(7).fill({ width: 8 }), { width: 9 }, { width: 9 }];
+      ws1.columns = [{ width: 18 }, { width: 6 }, { width: 10 }, { width: 24 }, ...Array(7).fill({ width: 8 }), { width: 9 }, { width: 9 }];
       ws1.addRow([`Control OT+ working hr shall be not over ${S.cfg.weeklyCap} hr/week`]).font = { bold: true, size: 13 };
       for (let wsD = o.from; wsD <= o.to; wsD = L.addDays(wsD, 7)) {
         const days = L.weekDays(wsD);
         ws1.addRow([]);
-        const h1 = ws1.addRow(['Team', 'EN', 'NAME', ...days.map(d => DOW[L.dow(d)].toUpperCase()), 'W/Hrs.', 'TOTAL']);
-        const h2 = ws1.addRow(['', '', `${days[0]} → ${days[6]}`, ...days.map(d => +d.slice(8)), '', S.cfg.weeklyCap]);
+        const h1 = ws1.addRow(['Group', 'Team', 'EN', 'NAME', ...days.map(d => DOW[L.dow(d)].toUpperCase()), 'W/Hrs.', 'TOTAL']);
+        const h2 = ws1.addRow(['', '', '', `${days[0]} → ${days[6]}`, ...days.map(d => +d.slice(8)), '', S.cfg.weeklyCap]);
         [h1, h2].forEach(r => r.eachCell(c => { c.font = { bold: true }; c.border = thin; c.alignment = { horizontal: 'center' }; c.fill = fill('#B2B2B2'); }));
-        days.forEach((d, i) => { if (L.publicHolidayOn(S.holidays, d)) { [h1, h2].forEach(r => { r.getCell(4 + i).fill = fill('#FFFF00'); }); } });
+        days.forEach((d, i) => { if (L.publicHolidayOn(S.holidays, d)) { [h1, h2].forEach(r => { r.getCell(5 + i).fill = fill('#FFFF00'); }); } });
         users.forEach(u => {
           const w = L.weekTotals(byU[u.en] || {}, wsD, S.cfg);
-          const r = ws1.addRow([u.team || '', u.en, uName(u), ...w.days.map(x => {
+          const r = ws1.addRow([groupName(u.groupId), u.team || '', u.en, uName(u), ...w.days.map(x => {
             const e = x.entry; if (!e || e.status === 'rejected') return '';
             return (e.type === 'OT_WD' || e.type === 'OT_HD') ? +e.hours : L.cellText(e);
           }), w.normal, w.total]);
           r.eachCell({ includeEmpty: true }, c => { c.border = thin; });
           w.days.forEach((x, i) => {
-            const e = x.entry, c = r.getCell(4 + i);
+            const e = x.entry, c = r.getCell(5 + i);
             c.alignment = { horizontal: 'center' };
             if (!e || e.status === 'rejected') return;
             const col = L.cellColor(e); if (col) c.fill = fill(col);
@@ -811,38 +974,38 @@
             if (e.note) notes.push(e.note);
             if (notes.length) c.note = notes.join(' · ');
           });
-          if (u.team) r.getCell(1).fill = fill(C.TEAM[u.team]);
-          if (w.over) r.getCell(11).fill = fill(C.OVER);
-          r.getCell(11).font = { bold: true };
+          if (u.team) r.getCell(2).fill = fill(C.TEAM[u.team]);
+          if (w.over) r.getCell(13).fill = fill(C.OVER);
+          r.getCell(13).font = { bold: true };
         });
       }
       ws1.addRow([]);
-      const lg = ws1.addRow(['', '', 'สี:', 'Day', 'Night', 'OT 10.5', 'ออกโอ', 'AL', 'SL', 'ลากิจ']);
-      [['D', 4], ['N', 5], ['OT_HD', 6], ['NO_OT', 7], ['AL', 8], ['SL', 9], ['PL', 10]].forEach(([k, i]) => { lg.getCell(i).fill = fill(C[k]); lg.getCell(i).border = thin; });
+      const lg = ws1.addRow(['', '', '', 'สี:', 'Day', 'Night', 'OT 10.5', 'ออกโอ', 'AL', 'SL', 'ลากิจ']);
+      [['D', 5], ['N', 6], ['OT_HD', 7], ['NO_OT', 8], ['AL', 9], ['SL', 10], ['PL', 11]].forEach(([k, i]) => { lg.getCell(i).fill = fill(C[k]); lg.getCell(i).border = thin; });
 
       // --- Summary sheet (month export) ---
       if (o.month) {
         const ws2 = wb.addWorksheet('Summary');
         ws2.addRow(['สรุป OT ' + mLabel(o.month) + (S.approvedOnly ? ' (เฉพาะอนุมัติแล้ว)' : '')]).font = { bold: true, size: 13 };
-        const hdr = ws2.addRow(['Team', 'EN', 'Name', 'OT วันทำงาน (วัน)', 'OT วันทำงาน (ชม.)', 'OT วันหยุด/OT300 (วัน)', 'OT วันหยุด (ชม.)', 'รวม OT (ชม.)', 'ออกโอ', 'Day shift', 'Night shift', 'AL', 'SL', 'ลากิจ', `สัปดาห์เกิน ${S.cfg.weeklyCap}`, 'สูงสุด/สัปดาห์', 'รออนุมัติ']);
+        const hdr = ws2.addRow(['Group', 'Team', 'EN', 'Name', 'OT วันทำงาน (วัน)', 'OT วันทำงาน (ชม.)', 'OT วันหยุด/OT300 (วัน)', 'OT วันหยุด (ชม.)', 'รวม OT (ชม.)', 'ออกโอ', 'Day shift', 'Night shift', 'AL', 'SL', 'ลากิจ', `สัปดาห์เกิน ${S.cfg.weeklyCap}`, 'สูงสุด/สัปดาห์', 'รออนุมัติ']);
         hdr.eachCell(c => { c.font = { bold: true }; c.fill = fill('#D9E1F2'); c.border = thin; c.alignment = { wrapText: true, horizontal: 'center' }; });
         summaries(o.data, o.month).forEach(({ u, s }) => {
-          const r = ws2.addRow([u.team || '', u.en, uName(u), s.otWdDays, s.otWdHours, s.otHdDays, s.otHdHours, s.otWdHours + s.otHdHours, s.noOtDays, s.dayShifts, s.nightShifts, s.AL, s.SL, s.PL, s.weeksOver, s.maxWeek, s.pending]);
+          const r = ws2.addRow([groupName(u.groupId), u.team || '', u.en, uName(u), s.otWdDays, s.otWdHours, s.otHdDays, s.otHdHours, s.otWdHours + s.otHdHours, s.noOtDays, s.dayShifts, s.nightShifts, s.AL, s.SL, s.PL, s.weeksOver, s.maxWeek, s.pending]);
           r.eachCell({ includeEmpty: true }, c => { c.border = thin; });
-          if (s.weeksOver) r.getCell(15).fill = fill(C.OVER);
+          if (s.weeksOver) r.getCell(16).fill = fill(C.OVER);
         });
-        for (let i = 1; i <= 17; i++) ws2.getColumn(i).width = i === 3 ? 26 : 12;
+        for (let i = 1; i <= 18; i++) ws2.getColumn(i).width = i === 4 ? 26 : i === 1 ? 18 : 12;
       }
 
       // --- Raw entries ---
       const ws3 = wb.addWorksheet('Entries');
-      ws3.addRow(['Date', 'Day', 'EN', 'Name', 'Team', 'Type', 'Shift', 'OT hours', 'Status', 'Note', 'Reviewed by', 'Review note']).eachCell(c => { c.font = { bold: true }; c.fill = fill('#D9E1F2'); });
+      ws3.addRow(['Date', 'Day', 'EN', 'Name', 'Group', 'Team', 'Type', 'Shift', 'OT hours', 'Status', 'Note', 'Reviewed by', 'Review note']).eachCell(c => { c.font = { bold: true }; c.fill = fill('#D9E1F2'); });
       const uMap = {}; o.data.users.forEach(u => { uMap[u.en] = u; });
       o.data.entries.slice().sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : a.en.localeCompare(b.en)).forEach(e => {
         const u = uMap[e.en] || {};
-        ws3.addRow([e.date, DOW[L.dow(e.date)], e.en, uName(u), u.team || '', L.TYPES[e.type] ? L.TYPES[e.type].long : e.type, e.shift === 'N' ? 'Night' : e.shift === 'D' ? 'Day' : '', +e.hours || 0, STATUS_TH[e.status] || e.status, e.note || '', e.reviewedBy || '', e.reviewNote || '']);
+        ws3.addRow([e.date, DOW[L.dow(e.date)], e.en, uName(u), groupName(u.groupId), u.team || '', L.TYPES[e.type] ? L.TYPES[e.type].long : e.type, e.shift === 'N' ? 'Night' : e.shift === 'D' ? 'Day' : '', +e.hours || 0, STATUS_TH[e.status] || e.status, e.note || '', e.reviewedBy || '', e.reviewNote || '']);
       });
-      [11, 6, 9, 24, 6, 20, 7, 9, 11, 30, 11, 24].forEach((wd, i) => { ws3.getColumn(i + 1).width = wd; });
+      [11, 6, 9, 24, 18, 6, 20, 7, 9, 11, 30, 11, 24].forEach((wd, i) => { ws3.getColumn(i + 1).width = wd; });
 
       const buf = await wb.xlsx.writeBuffer();
       const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
