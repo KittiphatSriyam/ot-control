@@ -472,7 +472,7 @@
     sug.forEach(x => { by[x.date] = Object.assign({ status: 'pending' }, x); });
     const w = L.weekTotals(by, ws, S.cfg);
     modal(`<h3>เติมตาม Pattern ทีม ${esc(S.user.team)}</h3>
-      <p class="small muted">เติมเฉพาะวันที่ยังว่าง ตามที่ส่วนใหญ่ลง: วันทำงาน = OT 3.5 ตามกะ · หยุดวันแรก = OFF · หยุดวันที่สอง = OT 10.5 · ถ้าเกิน ${S.cfg.weeklyCap} ชม. จะเปลี่ยนวันใกล้ 10.5 เป็น "ออกโอ" (แก้ไขทีละวันได้ภายหลัง)</p>
+      <p class="small muted">เติมเฉพาะวันที่ยังว่าง ตามที่ส่วนใหญ่ลง: วันทำงาน = OT 3.5 ตามกะ · วันหยุดที่ติดกะเช้า = OT 10.5 (กะเช้า) · วันหยุดที่ติดกะดึก = OFF · ถ้าเกิน ${S.cfg.weeklyCap} ชม. จะเปลี่ยนวันใกล้ 10.5 เป็น "ออกโอ" (แก้ไขทีละวันได้ภายหลัง)</p>
       ${sug.map(x => `<div class="ap-entry"><span style="width:110px">${DOW[L.dow(x.date)]} ${dShort(x.date)}</span>${chip(Object.assign({ status: 'pending' }, x))} ${shiftIcon(x.shift)}</div>`).join('')}
       <div class="alert ${w.over ? 'err' : 'ok'}">รวมสัปดาห์ ${num(w.total)} / ${S.cfg.weeklyCap} ชม.</div>
       <div class="actions"><button class="btn" id="f-c">ยกเลิก</button><button class="btn primary" id="f-ok">บันทึก ${sug.length} วัน</button></div>`, root => {
@@ -851,7 +851,7 @@
         <tr><th class="name">NAME</th>${days.map(dd => { const h = L.publicHolidayOn(S.holidays, dd); return `<th class="${h ? 'hol' : ''}${tc(dd)}" title="${esc((h ? h.name : '') + (dd === today ? ' (วันนี้)' : ''))}">${dd === today ? '<span class="todaytag">วันนี้</span>' : ''}${DOW[L.dow(dd)].toUpperCase()}<br>${+dd.slice(8)}</th>`; }).join('')}<th>W/Hrs.</th><th>TOTAL</th></tr>
         ${body || `<tr><td colspan="10" class="muted">${myGroups().length || isAdmin() ? 'ยังไม่มี Technician ในกลุ่มนี้' : 'คุณยังไม่ได้ดูแลกลุ่มงานใด — ไปที่แท็บ "กลุ่มงาน" เพื่อสร้างกลุ่ม'}</td></tr>`}
       </table></div>
-      <p class="small muted">แตะช่องเพื่อแก้ไขแทน (บันทึกโดย Engineer = อนุมัติทันที) · ช่องตัวเลขจาง = ค่า default ที่ยังไม่ได้บันทึก (วันทำงาน 3.5 · หยุดวันแรก OFF · หยุดวันที่สอง 10.5 · เกิน ${S.cfg.weeklyCap} ชม. → ออกโอ) · แถวหัวทีม D = กะเช้า, N = กะดึก, H = วันหยุดตาม Pattern</p>
+      <p class="small muted">แตะช่องเพื่อแก้ไขแทน (บันทึกโดย Engineer = อนุมัติทันที) · ช่องตัวเลขจาง = ค่า default ที่ยังไม่ได้บันทึก (วันทำงาน 3.5 · วันหยุดติดกะเช้า 10.5 · วันหยุดติดกะดึก OFF · เกิน ${S.cfg.weeklyCap} ชม. → ออกโอ) · แถวหัวทีม D = กะเช้า, N = กะดึก, H = วันหยุดตาม Pattern</p>
     </div>${legend()}`;
     $('#g-prev').onclick = () => { S.week = L.addDays(S.week, -7); rerender(); };
     $('#g-next').onclick = () => { S.week = L.addDays(S.week, 7); rerender(); };

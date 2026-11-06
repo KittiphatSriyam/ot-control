@@ -192,10 +192,11 @@
   }
 
   /**
-   * Default entry for one day — what most technicians do (from the 2025-26 Control sheets):
-   *  work day (D/N)            → OT 3.5 on that shift
-   *  1st day of the 2 days off → OFF
-   *  2nd day of the 2 days off → OT 10.5 (shift of the block that starts next)
+   * Default entry for one day (rule confirmed by the user; matches 94–99% of the 2025-26 Control sheets):
+   *  work day (D/N)                         → OT 3.5 on that shift
+   *  day off next to the team's DAY shift   → OT 10.5, Day shift
+   *  day off next to the team's NIGHT shift → OFF
+   *    Day x4 | 10.5  OFF | Night x4 | OFF  10.5 | Day …   (cycle positions 4 = 10.5, 5 = OFF, 10 = OFF, 11 = 10.5)
    *  team holiday / substitute on a work day → OFF
    */
   function defaultEntry(team, s, holidays) {
@@ -204,8 +205,8 @@
     if (st !== 'H' && teamHolidayOn(holidays, team, s)) return { date: s, type: 'OFF', shift: '', hours: 0, note: '' };
     if (st === 'D' || st === 'N') return { date: s, type: 'OT_WD', shift: st, hours: 3.5, note: '' };
     const pos = cyclePos(team, s);
-    if (pos === 4 || pos === 10) return { date: s, type: 'OFF', shift: '', hours: 0, note: '' };
-    return { date: s, type: 'OT_HD', shift: pos === 5 ? 'N' : 'D', hours: 10.5, note: '' };
+    if (pos === 5 || pos === 10) return { date: s, type: 'OFF', shift: '', hours: 0, note: '' }; // touches the Night block
+    return { date: s, type: 'OT_HD', shift: 'D', hours: 10.5, note: '' };                         // pos 4 / 11: touches the Day block
   }
 
   /**
