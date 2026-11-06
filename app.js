@@ -844,7 +844,7 @@
         <span class="spacer"></span>
         ${groupPicker('g-group')}
         <button class="btn sm" id="g-today">สัปดาห์นี้</button>
-        ${fill.length ? `<button class="btn sm" id="g-fill" title="${isPast ? 'สัปดาห์ที่ผ่านมาแล้ว: เติมเฉพาะสัปดาห์นี้' : 'เติมค่า default ตั้งแต่สัปดาห์นี้ไป 3 เดือน'}">${ico('bot', 16)} Auto-fill ${isPast ? 'เฉพาะสัปดาห์นี้' : '3 เดือน'} · ว่าง ${fill.reduce((n, f) => n + f.entries.length, 0)} ช่อง</button>` : ''}
+        ${users.length ? `<button class="btn sm" id="g-fill" title="${isPast ? 'สัปดาห์ที่ผ่านมาแล้ว: คำนวณใหม่เฉพาะสัปดาห์นี้' : 'คำนวณใหม่ตั้งแต่สัปดาห์นี้ไป 3 เดือน'}">${ico('bot', 16)} Auto-fill ${isPast ? 'เฉพาะสัปดาห์นี้' : '3 เดือน'}${fill.length ? ` · ว่าง ${fill.reduce((n, f) => n + f.entries.length, 0)} ช่อง` : ''}</button>` : ''}
         <button class="btn sm primary" id="g-xls">${ico('download', 16)} Excel</button>
       </div>
       <div class="scroll"><table class="grid">
@@ -867,19 +867,21 @@
   }
 
   /**
-   * Server-side auto-fill of the default pattern, `weeks` weeks starting at ws (default: 3 months = 13 weeks).
+   * Server-side RECALCULATION of the default pattern, `weeks` weeks starting at ws (default: 3 months = 13 weeks):
+   * days the system filled (AUTO) are overwritten, empty days filled, days people entered/edited are kept.
    * groupId: '' = every group I manage (admin: all) · '__none__' = no group (admin) · otherwise that group.
    */
   async function runAutoFill(ws, groupId, weeks, after) {
     weeks = weeks || AUTOFILL_WEEKS;
     const we = L.addDays(ws, weeks * 7 - 1);
     const scope = groupId === '__none__' ? 'Technician ที่ยังไม่มีกลุ่ม' : groupId ? 'กลุ่ม ' + groupName(groupId) : (isAdmin() ? 'ทุกกลุ่ม' : 'ทุกกลุ่มที่คุณดูแล');
-    if (!confirm(`🤖 Auto-fill ${weeks > 1 ? '3 เดือน (' + weeks + ' สัปดาห์)' : '1 สัปดาห์'}: ${dShort(ws)} ${ws.slice(0, 4)} – ${dShort(we)} ${we.slice(0, 4)}\n${scope}\n\n` +
-      `ลงค่า default ตาม Pattern (3.5 / OFF / 10.5 / ออกโอ ไม่เกิน ${S.cfg.weeklyCap} ชม./สัปดาห์)\n` +
-      `เฉพาะช่องที่ยังว่าง · ไม่ทับข้อมูลที่ลงไว้ · ถือว่าอนุมัติแล้ว (AUTO)`)) return;
+    if (!confirm(`🤖 Auto-fill คำนวณใหม่ ${weeks > 1 ? '3 เดือน (' + weeks + ' สัปดาห์)' : '1 สัปดาห์'}: ${dShort(ws)} ${ws.slice(0, 4)} – ${dShort(we)} ${we.slice(0, 4)}\n${scope}\n\n` +
+      `• ช่องที่ระบบลงไว้ (AUTO) จะถูกเขียนทับด้วยค่าที่คำนวณใหม่ตาม Pattern · ทีม · วันหยุดล่าสุด\n` +
+      `• ช่องว่างจะถูกเติม (3.5 / OFF / 10.5 / ออกโอ ไม่เกิน ${S.cfg.weeklyCap} ชม./สัปดาห์)\n` +
+      `• ช่องที่ช่าง/Engineer แก้เอง (ลา สลับกะ ออกโอ รออนุมัติ) จะไม่ถูกแตะ`)) return;
     try {
       const r = await api('autoFill', { date: ws, groupId: groupId || '', weeks });
-      toast(r.added ? `Auto-fill แล้ว ${r.added} ช่อง (${r.people} คน)` : 'ไม่มีช่องว่างให้เติม');
+      toast(r.added || r.replaced ? `คำนวณใหม่แล้ว ${r.added} ช่อง (${r.people} คน)` : 'ไม่มี Technician ให้คำนวณ');
     } catch (e) { toast(e.message, true); }
     if (after) after();
   }
@@ -1144,7 +1146,7 @@
       </div>
       ${mine.length ? `<div class="card"><div class="afbar" style="margin:0"><span class="lbl">${ico('bot', 16)} Auto-fill ${isAdmin() ? 'ทุกกลุ่ม' : 'ทุกกลุ่มที่ฉันดูแล'}</span>
         <button class="btn sm primary" id="af-all-this">3 เดือน (ตั้งแต่สัปดาห์นี้)</button><button class="btn sm" id="af-all-next">สัปดาห์นี้อย่างเดียว</button></div>
-        <p class="small muted" style="margin:8px 0 0">ลงค่า default ตาม Pattern ให้ Technician ที่ active ล่วงหน้า 3 เดือน เฉพาะช่องที่ยังว่าง (ไม่ทับที่ลงไว้) · ถือว่าอนุมัติแล้ว · ระบบรันเองทุกคืน 00:30 ให้มีข้อมูลล่วงหน้า 3 เดือนเสมอ ปุ่มนี้ใช้เมื่ออยากให้ขึ้นทันที เช่น เพิ่งอนุมัติคนใหม่</p></div>` : ''}
+        <p class="small muted" style="margin:8px 0 0">กดแล้ว<b>คำนวณใหม่</b>ล่วงหน้า 3 เดือนตาม Pattern · ทีม · วันหยุดล่าสุด — ช่องที่ระบบลงไว้ (AUTO) ถูกเขียนทับ ช่องว่างถูกเติม ส่วนช่องที่ช่าง/Engineer แก้เอง (ลา สลับกะ ออกโอ) ไม่ถูกแตะ · ทุกคืน 00:30 ระบบเติมช่องว่างให้มีข้อมูลล่วงหน้า 3 เดือนเสมอ</p></div>` : ''}
       <div class="section-title">${isAdmin() ? 'กลุ่มทั้งหมด' : 'กลุ่มที่ฉันดูแล'} (${mine.length})</div>
       ${mine.map(card).join('') || '<div class="card muted">ยังไม่มีกลุ่ม</div>'}
       ${others.length ? `<div class="card"><h3>กลุ่มอื่น</h3>${others.map(g => `<div class="small">• <b>${esc(g.name)}</b> — Engineer: ${esc(g.engineers.map(e => e.name).join(', ') || '-')}${g.status !== 'active' ? ' (ปิด)' : ''}</div>`).join('')}</div>` : ''}`;
