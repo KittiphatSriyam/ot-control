@@ -412,7 +412,7 @@
       <div id="e-week"></div>
       ${ex && ex.status === 'approved' && !isEng() ? '<div class="alert warn">รายการนี้อนุมัติแล้ว ถ้าแก้ไขจะต้องรออนุมัติใหม่</div>' : ''}
       <div class="actions">
-        ${canDelete ? '<button class="btn danger" id="e-del">ลบ</button>' : ''}
+        ${canDelete ? '<button class="btn danger" id="e-del">' + (isEng() ? 'ลบ' : 'ยกเลิกคำขอ') + '</button>' : ''}
         <button class="btn" id="e-cancel">ยกเลิก</button>
         <button class="btn primary" id="e-save">บันทึก</button>
       </div>`, root => {
@@ -454,10 +454,10 @@
         } catch (e) { toast(e.message, true); }
       };
       if ($('#e-del', root)) $('#e-del', root).onclick = async () => {
-        if (!confirm('ลบรายการวันที่ ' + dShort(date) + ' ?')) return;
+        if (!confirm(isEng() ? 'ลบรายการวันที่ ' + dShort(date) + ' ? (วันนั้นจะว่าง)' : 'ยกเลิกคำขอวันที่ ' + dShort(date) + ' ? วันนั้นจะกลับเป็นค่าตาม Pattern')) return;
         try {
           await api('deleteEntries', { en: behalf ? u.en : undefined, dates: [date] });
-          closeModal(); toast('ลบแล้ว'); opts.onSaved && opts.onSaved();
+          closeModal(); toast(isEng() ? 'ลบแล้ว' : 'ยกเลิกคำขอแล้ว กลับเป็นค่าตาม Pattern'); opts.onSaved && opts.onSaved();
         } catch (e) { toast(e.message, true); }
       };
       paint();
@@ -589,7 +589,7 @@
     const today = L.todayStr();
     const entries = await api('listEntries', { from: L.addDays(today, -120), to: L.addDays(today, 90) }, { quiet: true });
     const by = byDateOf(entries);
-    const open = entries.filter(e => e.status !== 'approved').sort((a, b) => a.date < b.date ? 1 : -1);
+    const open = entries.filter(e => e.status !== 'approved' || /^ไม่อนุมัติ/.test(e.reviewNote || '')).sort((a, b) => a.date < b.date ? 1 : -1);
     const leaves = entries.filter(e => L.LEAVE_TYPES.includes(e.type)).sort((a, b) => a.date < b.date ? 1 : -1);
     const row = e => `<div class="ap-entry" data-date="${e.date}" style="cursor:pointer">
       <span style="width:110px">${DOW[L.dow(e.date)]} ${dShort(e.date)}</span>${chip(e)}
